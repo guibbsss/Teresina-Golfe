@@ -1,5 +1,5 @@
 {
-  "fullscreen": true,
-  "window_scale": 1,
+  "fullscreen": false,
+  "window_scale": 2,
   "settings_version": 1
 }
