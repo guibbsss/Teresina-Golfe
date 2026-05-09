@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pygame
 
@@ -19,6 +20,7 @@ from tour_teresina_golf.config import (
     COLOR_WALL,
     COLOR_WATER,
     COLOR_WATER_SHALLOW,
+    DEBUG_DRAW_PHASE_COLLISIONS,
     HOLE_CAPTURE_RADIUS,
     MAX_DRAG_LEN,
 )
@@ -26,9 +28,32 @@ from tour_teresina_golf.level import Level
 from tour_teresina_golf.play_round import RoundSession
 
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_FLAG_SCALED_CACHE: dict[tuple[str, int], pygame.Surface] = {}
+
+
+def _scaled_flag_surface(path: Path, target_h: int) -> pygame.Surface | None:
+    key = (str(path.resolve()), target_h)
+    if key in _FLAG_SCALED_CACHE:
+        return _FLAG_SCALED_CACHE[key]
+    if not path.is_file():
+        return None
+    img = pygame.image.load(str(path)).convert_alpha()
+    iw, ih = img.get_size()
+    if ih <= 0:
+        return None
+    scale = target_h / ih
+    nw = max(1, int(round(iw * scale)))
+    surf = pygame.transform.smoothscale(img, (nw, target_h))
+    _FLAG_SCALED_CACHE[key] = surf
+    return surf
+
+
 def draw_playfield(surface: pygame.Surface, level: Level) -> None:
-    """Piso estilo fairway + faixa de asfalto nas bordas internas."""
-    if level.play_rect:
+    """Fairway procedural ou imagem de fundo; colisões opcionais visíveis em debug."""
+    if level.background is not None:
+        surface.blit(level.background, (0, 0))
+    elif level.play_rect:
         pr = level.play_rect
         pygame.draw.rect(surface, COLOR_FAIRWAY, pr)
         for i in range(0, pr.w, 40):
@@ -37,21 +62,53 @@ def draw_playfield(surface: pygame.Surface, level: Level) -> None:
                     pygame.draw.rect(surface, COLOR_FAIRWAY_ALT, (pr.x + i, pr.y + j, 40, 40))
         pygame.draw.rect(surface, COLOR_ASPHALT, pr, width=3)
 
-    for w in level.walls:
-        pygame.draw.rect(surface, COLOR_WALL, w)
-        pygame.draw.rect(surface, (45, 38, 36), w, width=2)
+    if not level.hide_solids_overlay:
+        for w in level.walls:
+            pygame.draw.rect(surface, COLOR_WALL, w)
+            pygame.draw.rect(surface, (45, 38, 36), w, width=2)
 
-    for r in level.water:
-        pygame.draw.rect(surface, COLOR_WATER, r)
-        pygame.draw.rect(surface, COLOR_WATER_SHALLOW, r.inflate(-6, -6), border_radius=4)
+        for r in level.water:
+            pygame.draw.rect(surface, COLOR_WATER, r)
+            pygame.draw.rect(surface, COLOR_WATER_SHALLOW, r.inflate(-6, -6), border_radius=4)
 
-    for o in level.obstacles:
-        pygame.draw.rect(surface, (34, 78, 46), o)
-        pygame.draw.rect(surface, (28, 62, 38), o, width=2)
+        for o in level.obstacles:
+            pygame.draw.rect(surface, (34, 78, 46), o)
+            pygame.draw.rect(surface, (28, 62, 38), o, width=2)
 
+    # Com bitmap + overlay oculto não desenhar anel aqui (arte já tem terreno); buraco
+    # “real” pode vir de ``draw_programmatic_hole_and_flag`` quando definido no nível.
+    art_only_hole = level.background is not None and level.hide_solids_overlay
+    if not art_only_hole:
+        hx, hy = level.hole_center
+        cap = level.hole_capture_radius if level.hole_capture_radius is not None else HOLE_CAPTURE_RADIUS
+        ri = int(cap)
+        pygame.draw.circle(surface, COLOR_HOLE_RING, (int(hx), int(hy)), ri + 3, width=3)
+        pygame.draw.circle(surface, COLOR_HOLE, (int(hx), int(hy)), max(4, ri - 4))
+
+    if DEBUG_DRAW_PHASE_COLLISIONS:
+        if level.collision_debug_overlay is not None:
+            surface.blit(level.collision_debug_overlay, (0, 0))
+        else:
+            for r in level.walls + level.obstacles:
+                pygame.draw.rect(surface, (255, 0, 0), r, 2)
+
+
+def draw_programmatic_hole_and_flag(surface: pygame.Surface, level: Level) -> None:
+    """Círculo do buraco + sprite da bandeira (base do mastro no centro do buraco)."""
+    if not level.draw_programmatic_hole:
+        return
     hx, hy = level.hole_center
-    pygame.draw.circle(surface, COLOR_HOLE_RING, (int(hx), int(hy)), HOLE_CAPTURE_RADIUS + 3, width=3)
-    pygame.draw.circle(surface, COLOR_HOLE, (int(hx), int(hy)), HOLE_CAPTURE_RADIUS - 4)
+    cap = level.hole_capture_radius if level.hole_capture_radius is not None else HOLE_CAPTURE_RADIUS
+    ri = int(cap)
+    pygame.draw.circle(surface, COLOR_HOLE_RING, (int(hx), int(hy)), ri + 3, width=3)
+    pygame.draw.circle(surface, COLOR_HOLE, (int(hx), int(hy)), max(4, ri - 4))
+
+    flag_path = level.flag_sprite_path or (_REPO_ROOT / "acessorios" / "bandeira.png")
+    target_h = max(40, min(56, BALL_RADIUS * 7))
+    flag = _scaled_flag_surface(flag_path, target_h)
+    if flag is not None:
+        fw, fh = flag.get_size()
+        surface.blit(flag, (int(hx - fw // 2), int(hy - fh)))
 
 
 def draw_ball(surface: pygame.Surface, x: float, y: float) -> None:

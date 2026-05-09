@@ -1,12 +1,110 @@
-"""Colisão círculo vs retângulos alinhados aos eixos."""
+"""Colisão círculo vs retângulos alinhados aos eixos e vs mapa bitmap."""
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import pygame
 
 from tour_teresina_golf.config import RESTITUTION
+
+
+@dataclass(frozen=True)
+class CollisionGrid:
+    """Mapa lógico: branco=0 (livre), sólido≠0; linha a linha y major, x minor."""
+
+    width: int
+    height: int
+    solid: bytes
+
+    def is_solid_px(self, xi: int, yi: int) -> bool:
+        if xi < 0 or yi < 0 or xi >= self.width or yi >= self.height:
+            return True
+        return self.solid[yi * self.width + xi] != 0
+
+
+def _solid_world(grid: CollisionGrid, x: float, y: float) -> bool:
+    xi = int(x)
+    yi = int(y)
+    return grid.is_solid_px(xi, yi)
+
+
+def _circle_overlaps_bitmap(grid: CollisionGrid, x: float, y: float, r: float, n_samples: int) -> bool:
+    if _solid_world(grid, x, y):
+        return True
+    step = (2.0 * math.pi) / float(n_samples)
+    for i in range(n_samples):
+        a = i * step
+        ca = math.cos(a)
+        sa = math.sin(a)
+        if _solid_world(grid, x + ca * r, y + sa * r):
+            return True
+    return False
+
+
+def _escape_normal_bitmap(grid: CollisionGrid, x: float, y: float, r: float, n_samples: int) -> tuple[float, float]:
+    nx_acc = 0.0
+    ny_acc = 0.0
+    step = (2.0 * math.pi) / float(n_samples)
+    for i in range(n_samples):
+        a = i * step
+        ca = math.cos(a)
+        sa = math.sin(a)
+        px = x + ca * r
+        py = y + sa * r
+        if _solid_world(grid, px, py):
+            nx_acc -= ca
+            ny_acc -= sa
+    if _solid_world(grid, x, y):
+        gx = 0.0
+        gy = 0.0
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                if not _solid_world(grid, x + float(dx), y + float(dy)):
+                    gx += float(dx)
+                    gy += float(dy)
+        glen = math.hypot(gx, gy)
+        if glen > 1e-6:
+            return gx / glen, gy / glen
+    slen = math.hypot(nx_acc, ny_acc)
+    if slen < 1e-6:
+        return 1.0, 0.0
+    return nx_acc / slen, ny_acc / slen
+
+
+def collide_ball_bitmap(
+    x: float,
+    y: float,
+    vx: float,
+    vy: float,
+    r: float,
+    grid: CollisionGrid,
+    iterations: int = 4,
+    rim_samples: int = 16,
+    max_separate_steps: int = 96,
+) -> tuple[float, float, float, float]:
+    """
+    Colisão círculo vs pixels sólidos (preto no mapa). Branco = livre.
+    Iterações externas reduzem tuneling; separação interna passo-a-passo.
+    """
+    for _ in range(iterations):
+        if not _circle_overlaps_bitmap(grid, x, y, r, rim_samples):
+            break
+        nx, ny = _escape_normal_bitmap(grid, x, y, r, rim_samples)
+        vn = vx * nx + vy * ny
+        if vn < 0:
+            vx -= (1.0 + RESTITUTION) * vn * nx
+            vy -= (1.0 + RESTITUTION) * vn * ny
+        for _s in range(max_separate_steps):
+            if not _circle_overlaps_bitmap(grid, x, y, r, rim_samples):
+                break
+            x += nx * 1.0
+            y += ny * 1.0
+            nx, ny = _escape_normal_bitmap(grid, x, y, r, rim_samples)
+    return x, y, vx, vy
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:

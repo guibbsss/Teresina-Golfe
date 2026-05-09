@@ -9,7 +9,7 @@ from enum import Enum, auto
 import pygame
 
 from tour_teresina_golf import audio_stub
-from tour_teresina_golf.collision import ball_center_in_water, collide_ball_all_rects
+from tour_teresina_golf.collision import ball_center_in_water, collide_ball_all_rects, collide_ball_bitmap
 from tour_teresina_golf.config import (
     AIM_GRAB_RADIUS,
     BALL_RADIUS,
@@ -80,23 +80,35 @@ class RoundSession:
         hx, hy = self.level.hole_center
         dx = self.ball_x - hx
         dy = self.ball_y - hy
-        cap = HOLE_CAPTURE_RADIUS
+        cap = self.level.hole_capture_radius if self.level.hole_capture_radius is not None else HOLE_CAPTURE_RADIUS
         if dx * dx + dy * dy > cap * cap:
             return False
-        return _speed_sq(self.ball_vx, self.ball_vy) < HOLE_WIN_SPEED_SQ
+        win_sq = self.level.hole_win_speed_sq if self.level.hole_win_speed_sq is not None else HOLE_WIN_SPEED_SQ
+        return _speed_sq(self.ball_vx, self.ball_vy) < win_sq
 
     def physics_step(self, dt: float) -> RoundOutcome:
         self.ball_x += self.ball_vx * dt
         self.ball_y += self.ball_vy * dt
 
-        bx, by, bvx, bvy = collide_ball_all_rects(
-            self.ball_x,
-            self.ball_y,
-            self.ball_vx,
-            self.ball_vy,
-            BALL_RADIUS,
-            self.all_solids(),
-        )
+        cg = self.level.collision_grid
+        if cg is not None:
+            bx, by, bvx, bvy = collide_ball_bitmap(
+                self.ball_x,
+                self.ball_y,
+                self.ball_vx,
+                self.ball_vy,
+                BALL_RADIUS,
+                cg,
+            )
+        else:
+            bx, by, bvx, bvy = collide_ball_all_rects(
+                self.ball_x,
+                self.ball_y,
+                self.ball_vx,
+                self.ball_vy,
+                BALL_RADIUS,
+                self.all_solids(),
+            )
         self.ball_x, self.ball_y = bx, by
         self.ball_vx, self.ball_vy = bvx, bvy
 
@@ -126,7 +138,7 @@ class RoundSession:
         dx = self.ball_x - hx
         dy = self.ball_y - hy
         dist_sq = dx * dx + dy * dy
-        cap = HOLE_CAPTURE_RADIUS
+        cap = self.level.hole_capture_radius if self.level.hole_capture_radius is not None else HOLE_CAPTURE_RADIUS
         if dist_sq <= cap * cap:
             return RoundOutcome.VICTORY
         if self.strokes_left <= 0:

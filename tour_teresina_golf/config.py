@@ -9,6 +9,9 @@ SCREEN_WIDTH = LOGICAL_W
 SCREEN_HEIGHT = LOGICAL_H
 TITLE = "Tour Teresina Golf"
 
+# Desenvolvimento: True desenha retângulos de colisão da fase a vermelho durante o jogo
+DEBUG_DRAW_PHASE_COLLISIONS = False
+
 # Simulação
 FIXED_DT = 1.0 / 120.0
 MAX_PHYS_STEPS = 12
@@ -16,7 +19,7 @@ MAX_PHYS_STEPS = 12
 PHYS_ACCUM_LIMIT = 256
 
 # Bola
-BALL_RADIUS = 9
+BALL_RADIUS = 6
 MAX_SPEED = 2800.0
 RESTITUTION = 0.72
 FRICTION_PER_SEC = 2.15

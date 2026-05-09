@@ -1,0 +1,286 @@
+"""Menu principal: botões JOGAR… à direita; configurações centradas sob o subtítulo da arte."""
+
+from __future__ import annotations
+
+from enum import Enum, auto
+import math
+from pathlib import Path
+
+import pygame
+
+from tour_teresina_golf.config import SCREEN_HEIGHT, SCREEN_WIDTH
+
+# Paleta alinhada ao mockup (verdes dos botões)
+MENU_BTN_FILL = (26, 67, 20)
+MENU_BTN_BORDER = (78, 154, 49)
+MENU_BTN_TEXT = (255, 248, 240)
+MENU_ICON_PLAY = (255, 220, 60)
+MENU_ICON_GEAR = (200, 210, 200)
+MENU_ICON_TROPHY = (230, 190, 80)
+MENU_ICON_DOOR = (120, 82, 55)
+
+
+class MenuPanel(Enum):
+    MAIN = auto()
+    SETTINGS = auto()
+    RANKING = auto()
+
+
+class MenuIcon(Enum):
+    PLAY = auto()
+    GEAR = auto()
+    TROPHY = auto()
+    DOOR = auto()
+
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ASSETS = Path(__file__).resolve().parent / "assets"
+_FONT_PATH = _ASSETS / "fonts" / "PressStart2P-Regular.ttf"
+_INTRO_MENUS_PATH = _REPO_ROOT / "Menus" / "intro.png"
+_BG_PATH = _ASSETS / "menu_background.png"
+
+
+def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
+    return pygame.Rect(0, 0, w, h).move(center_x - w // 2, center_y - h // 2)
+
+
+def load_menu_pixel_fonts() -> tuple[pygame.font.Font, pygame.font.Font, pygame.font.Font]:
+    """Fontes para o menu (Press Start 2P em assets); tamanhos ajustados a 960×540."""
+    pygame.font.init()
+    if _FONT_PATH.is_file():
+        return (
+            pygame.font.Font(str(_FONT_PATH), 18),
+            pygame.font.Font(str(_FONT_PATH), 14),
+            pygame.font.Font(str(_FONT_PATH), 12),
+        )
+    # Fallback
+    f18 = pygame.font.SysFont("consolas", 18, bold=True)
+    f14 = pygame.font.SysFont("consolas", 14)
+    f12 = pygame.font.SysFont("consolas", 12)
+    return f18, f14, f12
+
+
+def _load_scaled_png(path: Path) -> pygame.Surface:
+    img = pygame.image.load(str(path)).convert()
+    if img.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT):
+        img = pygame.transform.smoothscale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+    return img
+
+
+def load_menu_background_surface() -> tuple[pygame.Surface, bool]:
+    """Carrega fundo do menu e da intro (mesma imagem).
+
+    Ordem: ``Menus/intro.png`` na raiz do repo, depois ``assets/menu_background.png``,
+    senão fundo procedural. Devolve (superfície, True) se veio de ficheiro PNG.
+    """
+    if _INTRO_MENUS_PATH.is_file():
+        return _load_scaled_png(_INTRO_MENUS_PATH), True
+    if _BG_PATH.is_file():
+        return _load_scaled_png(_BG_PATH), True
+    return _render_fallback_menu_background(), False
+
+
+def _render_fallback_menu_background() -> pygame.Surface:
+    """Cena simplificada (céu, cidade, ponte, relvado) se não existir menu_background.png."""
+    s = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    # Céu
+    for y in range(SCREEN_HEIGHT):
+        t = y / max(1, SCREEN_HEIGHT - 1)
+        r = int(80 + (135 - 80) * t)
+        g = int(170 + (205 - 170) * t)
+        b = int(235 + (255 - 235) * t)
+        pygame.draw.line(s, (r, g, b), (0, y), (SCREEN_WIDTH, y))
+
+    # Nuvens
+    for cx, cy in ((120, 55), (420, 40), (700, 65)):
+        for dx, dy, rad in ((0, 0, 28), (22, -5, 22), (-20, 4, 20)):
+            pygame.draw.circle(s, (255, 255, 255), (cx + dx, cy + dy), rad)
+
+    horizon = 310
+    # Relvado em primeiro plano
+    pygame.draw.ellipse(s, (42, 110, 62), (-80, SCREEN_HEIGHT - 140, SCREEN_WIDTH + 160, 200))
+    pygame.draw.ellipse(s, (52, 130, 78), (40, SCREEN_HEIGHT - 128, SCREEN_WIDTH - 80, 160))
+
+    # Avenida / cidade (silhuetas)
+    pygame.draw.rect(s, (55, 52, 58), (0, horizon, SCREEN_WIDTH, SCREEN_HEIGHT - horizon))
+    for x, w, h in (
+        (40, 55, 120),
+        (110, 70, 150),
+        (200, 48, 95),
+        (280, 60, 130),
+        (360, 52, 110),
+        (480, 75, 175),
+        (600, 45, 100),
+        (680, 58, 140),
+    ):
+        pygame.draw.rect(s, (72, 62, 68), (x, horizon - h, w, h))
+        pygame.draw.rect(s, (58, 50, 55), (x + 6, horizon - h + 20, w - 12, h - 20))
+
+    # Ponte estaiada (direita)
+    bx = SCREEN_WIDTH - 120
+    pygame.draw.line(s, (220, 220, 230), (bx, horizon - 20), (bx + 40, horizon - 140), 6)
+    pygame.draw.line(s, (200, 200, 215), (bx, horizon - 20), (bx - 50, horizon - 90), 4)
+    pygame.draw.line(s, (180, 190, 210), (bx - 50, horizon - 10), (bx + 80, horizon - 10), 5)
+
+    # Buraco + bola
+    pygame.draw.circle(s, (30, 32, 36), (SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT - 42), 14)
+    pygame.draw.circle(s, (245, 245, 245), (SCREEN_WIDTH // 2 - 188, SCREEN_HEIGHT - 48), 8)
+
+    return s
+
+
+def _main_menu_stack_vertical_centers() -> tuple[float, int]:
+    """Centros Y da pilha dos 4 botões do menu (base comum com configurações)."""
+    BTN_H = 42
+    MARGIN_B = 22
+    GAP = 8
+    step = BTN_H + GAP
+    y_bottom_center = SCREEN_HEIGHT - MARGIN_B - BTN_H // 2
+    return float(y_bottom_center), step
+
+
+def compute_main_menu_button_rects() -> list[pygame.Rect]:
+    """Quatro botões alinhados ao canto inferior direito: JOGAR … SAIR (de cima para baixo)."""
+    BTN_W, BTN_H = 282, 42
+    MARGIN_R = 24
+    y_bottom_center, step = _main_menu_stack_vertical_centers()
+    cx = SCREEN_WIDTH - MARGIN_R - BTN_W // 2
+    rects: list[pygame.Rect] = []
+    for idx in range(4):
+        j_from_bottom = 3 - idx
+        cy = int(y_bottom_center - j_from_bottom * step)
+        rects.append(pygame.Rect(cx - BTN_W // 2, cy - BTN_H // 2, BTN_W, BTN_H))
+    return rects
+
+
+def compute_settings_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
+    """Ecrã inteiro + Voltar: mesma altura que os dois botões inferiores do menu, centrados em X."""
+    PANEL_W = 340
+    cx = SCREEN_WIDTH // 2
+    h_fs, h_back = 46, 46
+    y_bottom_center, step = _main_menu_stack_vertical_centers()
+    # Mesmas linhas que os botões 3 e 4 da pilha principal (por baixo de CONFIGURACOES / por baixo de RANKING)
+    cy_back = int(y_bottom_center - 0 * step)
+    cy_fs = int(y_bottom_center - 1 * step)
+    opt_toggle_fs = _button_rect(cx, cy_fs, PANEL_W, h_fs)
+    opt_back = _button_rect(cx, cy_back, 260, h_back)
+    return opt_toggle_fs, opt_back
+
+
+def compute_ranking_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
+    """Caixa central e botão Voltar."""
+    box = pygame.Rect(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 90, 400, 180)
+    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 36, 200, 44)
+    return box, back
+
+
+def _draw_icon_play(surf: pygame.Surface, cx: int, cy: int, size: int = 12) -> None:
+    pts = [(cx - size // 2, cy - size // 2), (cx - size // 2, cy + size // 2), (cx + size // 2, cy)]
+    pygame.draw.polygon(surf, MENU_ICON_PLAY, pts)
+
+
+def _draw_icon_gear(surf: pygame.Surface, cx: int, cy: int) -> None:
+    r = 10
+    pygame.draw.circle(surf, MENU_ICON_GEAR, (cx, cy), r, 2)
+    for i in range(8):
+        ang = i * math.pi / 4
+        x1 = cx + math.cos(ang) * (r - 2)
+        y1 = cy + math.sin(ang) * (r - 2)
+        x2 = cx + math.cos(ang) * (r + 5)
+        y2 = cy + math.sin(ang) * (r + 5)
+        pygame.draw.line(surf, MENU_ICON_GEAR, (x1, y1), (x2, y2), 2)
+
+
+def _draw_icon_trophy(surf: pygame.Surface, cx: int, cy: int) -> None:
+    pygame.draw.polygon(surf, MENU_ICON_TROPHY, [(cx, cy - 10), (cx - 9, cy + 6), (cx + 9, cy + 6)])
+    pygame.draw.rect(surf, MENU_ICON_TROPHY, (cx - 10, cy + 6, 20, 5))
+    pygame.draw.rect(surf, MENU_ICON_TROPHY, (cx - 6, cy + 10, 12, 4))
+
+
+def _draw_icon_door(surf: pygame.Surface, cx: int, cy: int) -> None:
+    pygame.draw.rect(surf, MENU_ICON_DOOR, (cx - 9, cy - 10, 18, 22), border_radius=2)
+    pygame.draw.circle(surf, (220, 200, 120), (cx + 4, cy), 2)
+    # seta para dentro
+    pygame.draw.polygon(surf, (120, 200, 100), [(cx - 4, cy - 3), (cx - 4, cy + 3), (cx + 4, cy)])
+
+
+def _draw_menu_icon(surf: pygame.Surface, kind: MenuIcon, cx: int, cy: int) -> None:
+    if kind == MenuIcon.PLAY:
+        _draw_icon_play(surf, cx, cy)
+    elif kind == MenuIcon.GEAR:
+        _draw_icon_gear(surf, cx, cy)
+    elif kind == MenuIcon.TROPHY:
+        _draw_icon_trophy(surf, cx, cy)
+    else:
+        _draw_icon_door(surf, cx, cy)
+
+
+def draw_main_menu_buttons(
+    surf: pygame.Surface,
+    font_label: pygame.font.Font,
+    rects: list[pygame.Rect],
+    labels: tuple[str, ...],
+    icons: tuple[MenuIcon, ...],
+) -> None:
+    for rect, label, icon in zip(rects, labels, icons):
+        pygame.draw.rect(surf, MENU_BTN_FILL, rect, border_radius=8)
+        pygame.draw.rect(surf, MENU_BTN_BORDER, rect, width=2, border_radius=8)
+        icx = rect.left + 26
+        icy = rect.centery
+        _draw_menu_icon(surf, icon, icx, icy)
+        tx = font_label.render(label, True, MENU_BTN_TEXT)
+        surf.blit(tx, tx.get_rect(midleft=(rect.left + 48, rect.centery)))
+
+
+def draw_menu_background(surf: pygame.Surface, bg: pygame.Surface) -> None:
+    surf.blit(bg, (0, 0))
+
+
+def draw_settings_overlay(
+    surf: pygame.Surface,
+    font_ui: pygame.font.Font,
+    font_small: pygame.font.Font,
+    settings: object,
+    rects: tuple[pygame.Rect, pygame.Rect],
+) -> None:
+    """Painel de vídeo: apenas ecrã inteiro e Voltar (atalhos [ ] / escala ficam no teclado global)."""
+    opt_toggle_fs_rect, opt_back_rect = rects
+
+    fs = getattr(settings, "fullscreen")
+    fs_label = "Ecra inteiro: ligado" if fs else "Ecra inteiro: desligado"
+    pygame.draw.rect(surf, MENU_BTN_FILL, opt_toggle_fs_rect, border_radius=8)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, opt_toggle_fs_rect, width=2, border_radius=8)
+    t_fs = font_ui.render(fs_label, True, MENU_BTN_TEXT)
+    surf.blit(t_fs, t_fs.get_rect(center=opt_toggle_fs_rect.center))
+
+    pygame.draw.rect(surf, MENU_BTN_FILL, opt_back_rect, border_radius=8)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, opt_back_rect, width=2, border_radius=8)
+    t_back = font_small.render("VOLTAR", True, MENU_BTN_TEXT)
+    surf.blit(t_back, t_back.get_rect(center=opt_back_rect.center))
+
+
+def draw_ranking_overlay(
+    surf: pygame.Surface,
+    font_title: pygame.font.Font,
+    font_ui: pygame.font.Font,
+    box_rect: pygame.Rect,
+    back_rect: pygame.Rect,
+) -> None:
+    veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    veil.fill((10, 14, 18, 145))
+    surf.blit(veil, (0, 0))
+
+    pygame.draw.rect(surf, (22, 38, 22), box_rect, border_radius=14)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, box_rect, width=3, border_radius=14)
+
+    t = font_title.render("RANKING", True, MENU_BTN_TEXT)
+    surf.blit(t, t.get_rect(midtop=(box_rect.centerx, box_rect.top + 24)))
+
+    msg = font_ui.render("Em breve", True, (220, 215, 200))
+    surf.blit(msg, msg.get_rect(center=(box_rect.centerx, box_rect.centery + 8)))
+
+    pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)
+    vb = font_ui.render("VOLTAR", True, MENU_BTN_TEXT)
+    surf.blit(vb, vb.get_rect(center=back_rect.center))

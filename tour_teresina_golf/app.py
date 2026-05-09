@@ -16,9 +16,30 @@ from tour_teresina_golf.config import (
     SCREEN_WIDTH,
     TITLE,
 )
-from tour_teresina_golf.draw_play import draw_aim, draw_ball, draw_hud, draw_playfield
+from tour_teresina_golf.draw_play import (
+    draw_aim,
+    draw_ball,
+    draw_hud,
+    draw_playfield,
+    draw_programmatic_hole_and_flag,
+)
 from tour_teresina_golf.intro_screen import IntroState
-from tour_teresina_golf.level import make_test_level
+from tour_teresina_golf.level import make_fase1_level, make_level_by_id
+
+_VICTORY_CONTINUE_TO: dict[str, str] = {"fase1": "fase2", "fase2": "fase3"}
+from tour_teresina_golf.main_menu_ui import (
+    MenuIcon,
+    MenuPanel,
+    compute_main_menu_button_rects,
+    compute_ranking_panel_rects,
+    compute_settings_panel_rects,
+    draw_main_menu_buttons,
+    draw_menu_background,
+    draw_ranking_overlay,
+    draw_settings_overlay,
+    load_menu_background_surface,
+    load_menu_pixel_fonts,
+)
 from tour_teresina_golf.play_round import RoundOutcome, RoundSession
 from tour_teresina_golf.settings import load_settings, save_settings
 from tour_teresina_golf.video import DisplayPresenter
@@ -27,7 +48,6 @@ from tour_teresina_golf.video import DisplayPresenter
 class GameScreen(Enum):
     INTRO = auto()
     MENU = auto()
-    OPTIONS = auto()
     PLAY = auto()
     VICTORY = auto()
     GAME_OVER = auto()
@@ -46,6 +66,23 @@ def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
     return pygame.Rect(0, 0, w, h).move(center_x - w // 2, center_y - h // 2)
 
 
+def _victory_button_rects(level_id: str) -> tuple[pygame.Rect | None, pygame.Rect, pygame.Rect]:
+    """Continuar (fase1→2, fase2→3), Menu, Jogar novamente."""
+    cx = SCREEN_WIDTH // 2
+    cy = SCREEN_HEIGHT // 2
+    if level_id in _VICTORY_CONTINUE_TO:
+        return (
+            _button_rect(cx, cy + 24, 280, 44),
+            _button_rect(cx, cy + 84, 260, 44),
+            _button_rect(cx, cy + 144, 260, 44),
+        )
+    return (
+        None,
+        _button_rect(cx, cy + 56, 260, 48),
+        _button_rect(cx, cy + 116, 260, 48),
+    )
+
+
 def run() -> None:
     pygame.init()
     pygame.display.set_caption(TITLE)
@@ -60,26 +97,21 @@ def run() -> None:
 
     font_title, font_sub, font_ui, font_ui_big = _make_fonts()
 
+    menu_bg, _ = load_menu_background_surface()
+    menu_font_title, menu_font_btn, menu_font_hint = load_menu_pixel_fonts()
+    menu_panel = MenuPanel.MAIN
+    menu_btn_rects = compute_main_menu_button_rects()
+    settings_rects = compute_settings_panel_rects()
+    ranking_box_rect, ranking_back_rect = compute_ranking_panel_rects()
+    menu_labels = ("JOGAR", "CONFIGURACOES", "RANKING", "SAIR")
+    menu_icons = (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.DOOR)
+
     screen_state = GameScreen.INTRO
-    intro = IntroState()
+    intro = IntroState(menu_bg)
     session: RoundSession | None = None
     phys_accum = 0.0
     game_over_reason: str = ""
     strokes_used_victory = 0
-
-    _mcy = SCREEN_HEIGHT // 2
-    menu_play_rect = _button_rect(SCREEN_WIDTH // 2, _mcy - 52, 260, 48)
-    menu_options_rect = _button_rect(SCREEN_WIDTH // 2, _mcy + 8, 260, 48)
-    menu_quit_rect = _button_rect(SCREEN_WIDTH // 2, _mcy + 68, 260, 48)
-
-    _ocy = SCREEN_HEIGHT // 2
-    opt_toggle_fs_rect = _button_rect(SCREEN_WIDTH // 2, _ocy - 72, 340, 46)
-    opt_scale_minus_rect = _button_rect(SCREEN_WIDTH // 2 - 88, _ocy + 8, 72, 40)
-    opt_scale_plus_rect = _button_rect(SCREEN_WIDTH // 2 + 88, _ocy + 8, 72, 40)
-    opt_back_rect = _button_rect(SCREEN_WIDTH // 2, _ocy + 88, 260, 46)
-
-    vic_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 56, 260, 48)
-    vic_retry_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 116, 260, 48)
 
     go_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 56, 260, 48)
     go_retry_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 116, 260, 48)
@@ -139,38 +171,39 @@ def run() -> None:
                     screen_state = GameScreen.MENU
 
             elif screen_state == GameScreen.MENU:
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if menu_play_rect.collidepoint(ev_mx, ev_my):
-                        audio_stub.play_ui_confirm()
-                        session = RoundSession.new(make_test_level())
-                        phys_accum = 0.0
-                        screen_state = GameScreen.PLAY
-                    elif menu_options_rect.collidepoint(ev_mx, ev_my):
-                        audio_stub.play_ui_confirm()
-                        screen_state = GameScreen.OPTIONS
-                    elif menu_quit_rect.collidepoint(ev_mx, ev_my):
-                        running = False
-
-            elif screen_state == GameScreen.OPTIONS:
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if opt_toggle_fs_rect.collidepoint(ev_mx, ev_my):
-                        settings.fullscreen = not settings.fullscreen
-                        physical_screen = presenter.apply_video_mode(settings)
-                        save_settings(settings)
-                    elif opt_scale_minus_rect.collidepoint(ev_mx, ev_my) and not settings.fullscreen:
-                        settings.window_scale -= 1
-                        settings.clamp()
-                        physical_screen = presenter.apply_video_mode(settings)
-                        save_settings(settings)
-                    elif opt_scale_plus_rect.collidepoint(ev_mx, ev_my) and not settings.fullscreen:
-                        settings.window_scale += 1
-                        settings.clamp()
-                        physical_screen = presenter.apply_video_mode(settings)
-                        save_settings(settings)
-                    elif opt_back_rect.collidepoint(ev_mx, ev_my):
-                        screen_state = GameScreen.MENU
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    screen_state = GameScreen.MENU
+                opt_toggle_fs_rect, opt_back_rect = settings_rects
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    if menu_panel == MenuPanel.SETTINGS:
+                        menu_panel = MenuPanel.MAIN
+                    elif menu_panel == MenuPanel.RANKING:
+                        menu_panel = MenuPanel.MAIN
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if menu_panel == MenuPanel.MAIN:
+                        if menu_btn_rects[0].collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            session = RoundSession.new(make_fase1_level())
+                            phys_accum = 0.0
+                            screen_state = GameScreen.PLAY
+                        elif menu_btn_rects[1].collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.SETTINGS
+                        elif menu_btn_rects[2].collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.RANKING
+                        elif menu_btn_rects[3].collidepoint(ev_mx, ev_my):
+                            running = False
+                    elif menu_panel == MenuPanel.SETTINGS:
+                        if opt_toggle_fs_rect.collidepoint(ev_mx, ev_my):
+                            settings.fullscreen = not settings.fullscreen
+                            physical_screen = presenter.apply_video_mode(settings)
+                            save_settings(settings)
+                        elif opt_back_rect.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.MAIN
+                    elif menu_panel == MenuPanel.RANKING:
+                        if ranking_back_rect.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.MAIN
 
             elif screen_state == GameScreen.PLAY and session is not None:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -179,23 +212,38 @@ def run() -> None:
                     session.release_shot(ev_mx, ev_my)
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     session.cancel_aim()
+                    menu_panel = MenuPanel.MAIN
                     screen_state = GameScreen.MENU
 
             elif screen_state == GameScreen.VICTORY:
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if vic_menu_rect.collidepoint(ev_mx, ev_my):
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and session is not None:
+                    vic_cont, vic_menu_rect, vic_retry_rect = _victory_button_rects(session.level.id)
+                    if vic_cont is not None and vic_cont.collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        nxt = _VICTORY_CONTINUE_TO.get(session.level.id)
+                        if nxt:
+                            session = RoundSession.new(make_level_by_id(nxt))
+                            phys_accum = 0.0
+                            screen_state = GameScreen.PLAY
+                    elif vic_menu_rect.collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        menu_panel = MenuPanel.MAIN
                         screen_state = GameScreen.MENU
                     elif vic_retry_rect.collidepoint(ev_mx, ev_my):
-                        session = RoundSession.new(make_test_level())
+                        audio_stub.play_ui_confirm()
+                        session = RoundSession.new(make_level_by_id(session.level.id))
                         phys_accum = 0.0
                         screen_state = GameScreen.PLAY
 
             elif screen_state == GameScreen.GAME_OVER:
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and session is not None:
                     if go_menu_rect.collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        menu_panel = MenuPanel.MAIN
                         screen_state = GameScreen.MENU
                     elif go_retry_rect.collidepoint(ev_mx, ev_my):
-                        session = RoundSession.new(make_test_level())
+                        audio_stub.play_ui_confirm()
+                        session = RoundSession.new(make_level_by_id(session.level.id))
                         phys_accum = 0.0
                         screen_state = GameScreen.PLAY
 
@@ -226,72 +274,36 @@ def run() -> None:
             intro.draw(logical_screen, font_title, font_sub, font_ui)
 
         elif screen_state == GameScreen.MENU:
-            logical_screen.fill((36, 32, 40))
-            title = font_title.render("Tour Teresina Golf", True, (255, 230, 190))
-            logical_screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 80)))
-            subtitle = font_sub.render("PC · Mouse · Mini golfe urbano", True, (200, 180, 150))
-            logical_screen.blit(subtitle, subtitle.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 36)))
-
-            for rect, label in (
-                (menu_play_rect, "Jogar"),
-                (menu_options_rect, "Opções de vídeo"),
-                (menu_quit_rect, "Sair"),
-            ):
-                pygame.draw.rect(logical_screen, (70, 58, 52), rect, border_radius=8)
-                pygame.draw.rect(logical_screen, (130, 110, 90), rect, width=2, border_radius=8)
-                tx = font_ui_big.render(label, True, (255, 245, 230))
-                logical_screen.blit(tx, tx.get_rect(center=rect.center))
-
-            hint = font_ui.render("Atalhos: F11 · Alt+Enter · [ ] ajustar escala (janela)", True, (140, 130, 120))
-            logical_screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 28)))
-
-        elif screen_state == GameScreen.OPTIONS:
-            logical_screen.fill((32, 30, 38))
-            tit = font_title.render("Opções de vídeo", True, (255, 230, 200))
-            logical_screen.blit(tit, tit.get_rect(center=(SCREEN_WIDTH // 2, 96)))
-
-            fs_label = "Ecrã inteiro: ligado" if settings.fullscreen else "Ecrã inteiro: desligado"
-            pygame.draw.rect(logical_screen, (56, 48, 62), opt_toggle_fs_rect, border_radius=8)
-            pygame.draw.rect(logical_screen, (120, 100, 130), opt_toggle_fs_rect, width=2, border_radius=8)
-            t_fs = font_ui_big.render(fs_label, True, (245, 235, 255))
-            logical_screen.blit(t_fs, t_fs.get_rect(center=opt_toggle_fs_rect.center))
-
-            win_w = LOGICAL_W * settings.window_scale
-            win_h = LOGICAL_H * settings.window_scale
-            if settings.fullscreen:
-                res_line = "Modo janela: escolha escala abaixo ao voltar para janela."
-                scale_line = "Em ecrã inteiro o jogo adapta-se ao monitor (960×540 lógico)."
-            else:
-                res_line = f"Tamanho da janela: {win_w} × {win_h} px (escala {settings.window_scale}×)"
-                scale_line = "Menor / Maior alteram o tamanho da janela (1× = 960×540)."
-            logical_screen.blit(font_ui.render(res_line, True, (210, 200, 220)), (40, _ocy - 28))
-            logical_screen.blit(font_sub.render(scale_line, True, (160, 150, 175)), (40, _ocy - 4))
-
-            dim_fs = settings.fullscreen
-            sm_col = (38, 44, 48) if dim_fs else (52, 62, 72)
-            sm_border = (55, 65, 72) if dim_fs else (90, 110, 125)
-            txt_dim = (120, 125, 130) if dim_fs else (230, 240, 250)
-            pygame.draw.rect(logical_screen, sm_col, opt_scale_minus_rect, border_radius=6)
-            pygame.draw.rect(logical_screen, sm_border, opt_scale_minus_rect, width=1, border_radius=6)
-            minus_surf = font_ui_big.render("-", True, txt_dim)
-            logical_screen.blit(minus_surf, minus_surf.get_rect(center=opt_scale_minus_rect.center))
-
-            pygame.draw.rect(logical_screen, sm_col, opt_scale_plus_rect, border_radius=6)
-            pygame.draw.rect(logical_screen, sm_border, opt_scale_plus_rect, width=1, border_radius=6)
-            plus_surf = font_ui_big.render("+", True, txt_dim)
-            logical_screen.blit(plus_surf, plus_surf.get_rect(center=opt_scale_plus_rect.center))
-
-            pygame.draw.rect(logical_screen, (58, 52, 48), opt_back_rect, border_radius=8)
-            pygame.draw.rect(logical_screen, (130, 118, 105), opt_back_rect, width=2, border_radius=8)
-            t_back = font_ui.render("Voltar ao menu", True, (255, 248, 235))
-            logical_screen.blit(t_back, t_back.get_rect(center=opt_back_rect.center))
-
-            foot = font_ui.render("Esc volta ao menu · alterações gravadas em user_settings.json", True, (120, 115, 130))
-            logical_screen.blit(foot, foot.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 24)))
+            draw_menu_background(logical_screen, menu_bg)
+            if menu_panel == MenuPanel.MAIN:
+                draw_main_menu_buttons(
+                    logical_screen,
+                    menu_font_btn,
+                    menu_btn_rects,
+                    menu_labels,
+                    menu_icons,
+                )
+            elif menu_panel == MenuPanel.SETTINGS:
+                draw_settings_overlay(
+                    logical_screen,
+                    menu_font_btn,
+                    menu_font_hint,
+                    settings,
+                    settings_rects,
+                )
+            elif menu_panel == MenuPanel.RANKING:
+                draw_ranking_overlay(
+                    logical_screen,
+                    menu_font_title,
+                    menu_font_btn,
+                    ranking_box_rect,
+                    ranking_back_rect,
+                )
 
         elif screen_state == GameScreen.PLAY and session is not None:
             logical_screen.fill((28, 26, 32))
             draw_playfield(logical_screen, session.level)
+            draw_programmatic_hole_and_flag(logical_screen, session.level)
             draw_ball(logical_screen, session.ball_x, session.ball_y)
             draw_aim(logical_screen, session, (int(mouse_logical[0]), int(mouse_logical[1])))
             draw_hud(logical_screen, font_ui, session)
@@ -303,7 +315,15 @@ def run() -> None:
             info = font_ui_big.render(f"Tacadas usadas: {strokes_used_victory}", True, (220, 235, 210))
             logical_screen.blit(info, info.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 8)))
 
-            for rect, label in ((vic_menu_rect, "Menu"), (vic_retry_rect, "Jogar novamente")):
+            vic_cont, vic_menu_rect, vic_retry_rect = (
+                _victory_button_rects(session.level.id) if session is not None else (None, pygame.Rect(0, 0, 0, 0), pygame.Rect(0, 0, 0, 0))
+            )
+            labels: list[tuple[pygame.Rect, str]]
+            if vic_cont is not None:
+                labels = [(vic_cont, "Continuar"), (vic_menu_rect, "Menu"), (vic_retry_rect, "Jogar novamente")]
+            else:
+                labels = [(vic_menu_rect, "Menu"), (vic_retry_rect, "Jogar novamente")]
+            for rect, label in labels:
                 pygame.draw.rect(logical_screen, (52, 72, 52), rect, border_radius=8)
                 pygame.draw.rect(logical_screen, (120, 160, 110), rect, width=2, border_radius=8)
                 tx = font_ui.render(label, True, (240, 250, 235))
