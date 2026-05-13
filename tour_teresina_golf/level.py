@@ -115,7 +115,7 @@ def _surface_to_collision_grid(surf: pygame.Surface, lum_threshold: int = 128) -
 
 
 def make_fase1_level() -> Level:
-    """Fase 1 — Av. Frei Serafim (colisões em 1920×1080 → espaço lógico 960×540)."""
+    """Fase 1 — Av. Frei Serafim (colisões por retângulos definidos em fase1_colisoes.py)."""
     m = _load_fase1_colisoes_module()
     lw, lh = float(m.LARGURA_FASE1), float(m.ALTURA_FASE1)
     sx = LOGICAL_W / lw
@@ -124,16 +124,6 @@ def make_fase1_level() -> Level:
     spawn = _scale_xy(m.SPAWN_FASE1, sx, sy)
     hole = _scale_xy(m.BURACO_FASE1, sx, sy)
     hole_cap = float(m.BURACO_RAIO_NATIVO) * min(sx, sy)
-
-    collision_path = _REPO_ROOT / "fases" / "fase1" / "fase1_mapa_colisao.png"
-    if not collision_path.is_file():
-        raise FileNotFoundError(f"Mapa de colisão em falta: {collision_path}")
-    col_surf = pygame.image.load(str(collision_path))
-    if col_surf.get_size() != (LOGICAL_W, LOGICAL_H):
-        col_surf = pygame.transform.smoothscale(col_surf, (LOGICAL_W, LOGICAL_H))
-    collision_grid = _surface_to_collision_grid(col_surf)
-    dbg_overlay = col_surf.convert_alpha()
-    dbg_overlay.set_alpha(85)
 
     img_path = _REPO_ROOT / "fases" / "fase1" / "fase1.png"
     if not img_path.is_file():
@@ -144,14 +134,21 @@ def make_fase1_level() -> Level:
     if pygame.display.get_surface() is not None:
         bg = bg.convert()
 
+    def _sr(xywh: tuple[int, int, int, int]) -> pygame.Rect:
+        x, y, w, h = xywh
+        return pygame.Rect(int(x * sx), int(y * sy), max(1, int(w * sx)), max(1, int(h * sy)))
+
+    walls = [_sr(r) for r in m.PAREDES_FASE1]
+    obstacles = [_sr(r) for r in m.OBSTACULOS_FASE1]
+
     return Level(
         id="fase1",
         name="Av. Frei Serafim",
         strokes=12,
         ball_spawn=spawn,
         hole_center=hole,
-        walls=[],
-        obstacles=[],
+        walls=walls,
+        obstacles=obstacles,
         water=[],
         play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H),
         background=bg,
@@ -159,8 +156,7 @@ def make_fase1_level() -> Level:
         hole_capture_radius=hole_cap,
         draw_programmatic_hole=True,
         flag_sprite_path=_REPO_ROOT / "acessorios" / "bandeira.png",
-        collision_grid=collision_grid,
-        collision_debug_overlay=dbg_overlay,
+        collision_grid=None,
     )
 
 

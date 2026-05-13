@@ -303,8 +303,8 @@ def run() -> None:
         elif screen_state == GameScreen.PLAY and session is not None:
             logical_screen.fill((28, 26, 32))
             draw_playfield(logical_screen, session.level)
-            draw_programmatic_hole_and_flag(logical_screen, session.level)
             draw_ball(logical_screen, session.ball_x, session.ball_y)
+            draw_programmatic_hole_and_flag(logical_screen, session.level)
             draw_aim(logical_screen, session, (int(mouse_logical[0]), int(mouse_logical[1])))
             draw_hud(logical_screen, font_ui, session)
 

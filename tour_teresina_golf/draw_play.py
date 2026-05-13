@@ -104,7 +104,7 @@ def draw_programmatic_hole_and_flag(surface: pygame.Surface, level: Level) -> No
     pygame.draw.circle(surface, COLOR_HOLE, (int(hx), int(hy)), max(4, ri - 4))
 
     flag_path = level.flag_sprite_path or (_REPO_ROOT / "acessorios" / "bandeira.png")
-    target_h = max(40, min(56, BALL_RADIUS * 7))
+    target_h = max(55, min(72, BALL_RADIUS * 9))
     flag = _scaled_flag_surface(flag_path, target_h)
     if flag is not None:
         fw, fh = flag.get_size()
