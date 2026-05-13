@@ -21,6 +21,10 @@ MENU_ICON_GEAR = (200, 210, 200)
 MENU_ICON_TROPHY = (230, 190, 80)
 MENU_ICON_DOOR = (120, 82, 55)
 MENU_ICON_COIN = (255, 214, 80)
+MENU_ICON_INFO = (240, 240, 240)
+
+# False se o menu nao incluir LOJA/SHOP (ex.: build sem Caju Coins).
+MENU_SHOP_BUTTON_ENABLED: bool = True
 
 
 class MenuPanel(Enum):
@@ -28,6 +32,7 @@ class MenuPanel(Enum):
     SETTINGS = auto()
     RANKING = auto()
     SHOP = auto()
+    CREDITS = auto()
 
 
 class MenuIcon(Enum):
@@ -36,6 +41,22 @@ class MenuIcon(Enum):
     TROPHY = auto()
     COIN = auto()
     DOOR = auto()
+
+
+def main_menu_button_count() -> int:
+    return 5 if MENU_SHOP_BUTTON_ENABLED else 4
+
+
+def main_menu_labels_and_icons() -> tuple[tuple[str, ...], tuple[MenuIcon, ...]]:
+    if MENU_SHOP_BUTTON_ENABLED:
+        return (
+            ("JOGAR", "CONFIGURACOES", "RANKING", "LOJA", "SAIR"),
+            (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.COIN, MenuIcon.DOOR),
+        )
+    return (
+        ("JOGAR", "CONFIGURACOES", "RANKING", "SAIR"),
+        (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.DOOR),
+    )
 
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -136,7 +157,7 @@ def _render_fallback_menu_background() -> pygame.Surface:
 
 
 def _main_menu_stack_vertical_centers() -> tuple[float, int]:
-    """Centros Y da pilha dos 5 botões do menu (base comum com configurações)."""
+    """Centros Y da pilha dos botoes do menu principal (4 ou 5; base comum com configuracoes)."""
     BTN_H = 42
     MARGIN_B = 22
     GAP = 8
@@ -146,14 +167,15 @@ def _main_menu_stack_vertical_centers() -> tuple[float, int]:
 
 
 def compute_main_menu_button_rects() -> list[pygame.Rect]:
-    """Cinco botões alinhados ao canto inferior direito: JOGAR … SAIR (de cima para baixo)."""
+    """Botões alinhados ao canto inferior direito: JOGAR … SAIR (de cima para baixo)."""
     BTN_W, BTN_H = 282, 42
     MARGIN_R = 24
+    n = main_menu_button_count()
     y_bottom_center, step = _main_menu_stack_vertical_centers()
     cx = SCREEN_WIDTH - MARGIN_R - BTN_W // 2
     rects: list[pygame.Rect] = []
-    for idx in range(5):
-        j_from_bottom = 4 - idx
+    for idx in range(n):
+        j_from_bottom = (n - 1) - idx
         cy = int(y_bottom_center - j_from_bottom * step)
         rects.append(pygame.Rect(cx - BTN_W // 2, cy - BTN_H // 2, BTN_W, BTN_H))
     return rects
@@ -165,7 +187,7 @@ def compute_settings_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
     cx = SCREEN_WIDTH // 2
     h_fs, h_back = 46, 46
     y_bottom_center, step = _main_menu_stack_vertical_centers()
-    # Mesmas linhas que os dois botões inferiores da pilha principal (LOJA e SAIR)
+    # Mesmas linhas que os dois botoes inferiores da pilha principal (LOJA e SAIR, ou RANKING e SAIR sem loja)
     cy_back = int(y_bottom_center - 0 * step)
     cy_fs = int(y_bottom_center - 1 * step)
     opt_toggle_fs = _button_rect(cx, cy_fs, PANEL_W, h_fs)
@@ -180,6 +202,26 @@ def compute_ranking_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
     box = pygame.Rect(SCREEN_WIDTH // 2 - panel_w // 2, SCREEN_HEIGHT // 2 - 140, panel_w, panel_h)
     back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 18, 200, 44)
     return box, back
+
+
+def compute_credits_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
+    panel_w = 820
+    panel_h = 360
+    box = pygame.Rect(
+        SCREEN_WIDTH // 2 - panel_w // 2,
+        SCREEN_HEIGHT // 2 - panel_h // 2,
+        panel_w,
+        panel_h,
+    )
+    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 20, 200, 44)
+    return box, back
+
+
+def compute_menu_credits_chip_rect() -> pygame.Rect:
+    """Chip pequeno no canto superior direito para abrir CREDITOS (fora da pilha de botoes)."""
+    w, h = 40, 30
+    margin_r, margin_t = 12, 12
+    return pygame.Rect(SCREEN_WIDTH - margin_r - w, margin_t, w, h)
 
 
 def compute_shop_panel_rects(
@@ -238,6 +280,12 @@ def _draw_icon_coin(surf: pygame.Surface, cx: int, cy: int) -> None:
     pygame.draw.arc(surf, (40, 30, 20), (cx - 6, cy - 6, 12, 12), 0.9, 2.6, 2)
 
 
+def _draw_icon_info(surf: pygame.Surface, cx: int, cy: int) -> None:
+    pygame.draw.circle(surf, MENU_ICON_INFO, (cx, cy), 10, width=2)
+    pygame.draw.rect(surf, MENU_ICON_INFO, (cx - 1, cy - 5, 3, 3))
+    pygame.draw.rect(surf, MENU_ICON_INFO, (cx - 1, cy - 1, 3, 7))
+
+
 def _draw_menu_icon(surf: pygame.Surface, kind: MenuIcon, cx: int, cy: int) -> None:
     if kind == MenuIcon.PLAY:
         _draw_icon_play(surf, cx, cy)
@@ -249,6 +297,12 @@ def _draw_menu_icon(surf: pygame.Surface, kind: MenuIcon, cx: int, cy: int) -> N
         _draw_icon_coin(surf, cx, cy)
     else:
         _draw_icon_door(surf, cx, cy)
+
+
+def draw_menu_credits_chip(surf: pygame.Surface, rect: pygame.Rect) -> None:
+    pygame.draw.rect(surf, MENU_BTN_FILL, rect, border_radius=6)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, rect, width=2, border_radius=6)
+    _draw_icon_info(surf, rect.centerx, rect.centery)
 
 
 def draw_main_menu_buttons(
@@ -403,6 +457,87 @@ def draw_ranking_overlay(
     pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
     pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)
     vb = font_ui.render("VOLTAR", True, MENU_BTN_TEXT)
+    surf.blit(vb, vb.get_rect(center=back_rect.center))
+
+
+def draw_credits_overlay(
+    surf: pygame.Surface,
+    font_title: pygame.font.Font,
+    font_ui: pygame.font.Font,
+    font_small: pygame.font.Font,
+    box_rect: pygame.Rect,
+    back_rect: pygame.Rect,
+) -> None:
+    veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    veil.fill((10, 14, 18, 145))
+    surf.blit(veil, (0, 0))
+
+    pygame.draw.rect(surf, (22, 38, 22), box_rect, border_radius=14)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, box_rect, width=3, border_radius=14)
+
+    t_head = font_title.render("CREDITOS", True, MENU_BTN_TEXT)
+    surf.blit(t_head, t_head.get_rect(midtop=(box_rect.centerx, box_rect.top + 18)))
+    t_sub = font_ui.render("Tour Teresina Golf", True, (255, 214, 80))
+    surf.blit(t_sub, t_sub.get_rect(midtop=(box_rect.centerx, box_rect.top + 38)))
+
+    sep_y1 = box_rect.top + 54
+    pygame.draw.line(
+        surf,
+        MENU_BTN_BORDER,
+        (box_rect.left + 12, sep_y1),
+        (box_rect.right - 12, sep_y1),
+        1,
+    )
+
+    max_text_w = box_rect.width - 60
+    g1 = "Gabriel Lages Oliveira de Azevedo"
+    g2 = "Guilherme Ruben Pereira Matos"
+    f_g1 = font_small if font_ui.size(g1)[0] > max_text_w else font_ui
+    f_g2 = font_small if font_ui.size(g2)[0] > max_text_w else font_ui
+
+    y_tech = box_rect.top + 174
+
+    c_sec = (180, 200, 160)
+    c_name = (240, 240, 220)
+    c_role = (160, 180, 140)
+    c_tech = (200, 210, 195)
+    lx = box_rect.left
+
+    t_eq = font_ui.render("EQUIPE", True, c_sec)
+    surf.blit(t_eq, (lx + 20, box_rect.top + 60))
+
+    s1 = f_g1.render(g1, True, c_name)
+    surf.blit(s1, (lx + 28, box_rect.top + 82))
+    r1 = font_small.render("Programacao e Fisica", True, c_role)
+    surf.blit(r1, (lx + 38, box_rect.top + 100))
+
+    s2 = f_g2.render(g2, True, c_name)
+    surf.blit(s2, (lx + 28, box_rect.top + 124))
+    r2 = font_small.render("Assets e Level Design", True, c_role)
+    surf.blit(r2, (lx + 38, box_rect.top + 142))
+
+    sep_y2 = y_tech - 12
+    pygame.draw.line(
+        surf,
+        MENU_BTN_BORDER,
+        (box_rect.left + 12, sep_y2),
+        (box_rect.right - 12, sep_y2),
+        1,
+    )
+
+    t_tec = font_ui.render("TECNOLOGIA", True, c_sec)
+    surf.blit(t_tec, (lx + 20, y_tech))
+    t_py = font_small.render("Python 3 + Pygame", True, c_tech)
+    surf.blit(t_py, (lx + 38, box_rect.top + 196))
+
+    t_cur = font_ui.render("CURSO", True, c_sec)
+    surf.blit(t_cur, (lx + 20, box_rect.top + 224))
+    t_turma = font_small.render("Turma Zeta  -  7 Periodo  -  ICEV", True, c_tech)
+    surf.blit(t_turma, (lx + 38, box_rect.top + 246))
+
+    pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)
+    vb = font_small.render("VOLTAR", True, MENU_BTN_TEXT)
     surf.blit(vb, vb.get_rect(center=back_rect.center))
 
 

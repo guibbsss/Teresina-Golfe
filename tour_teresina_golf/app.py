@@ -30,19 +30,24 @@ from tour_teresina_golf.draw_play import (
 from tour_teresina_golf.intro_screen import IntroState
 from tour_teresina_golf.level import make_level_by_id
 from tour_teresina_golf.main_menu_ui import (
-    MenuIcon,
+    MENU_SHOP_BUTTON_ENABLED,
     MenuPanel,
+    compute_credits_panel_rects,
     compute_main_menu_button_rects,
+    compute_menu_credits_chip_rect,
     compute_ranking_panel_rects,
     compute_settings_panel_rects,
     compute_shop_panel_rects,
+    draw_credits_overlay,
     draw_main_menu_buttons,
     draw_menu_background,
+    draw_menu_credits_chip,
     draw_ranking_overlay,
     draw_settings_overlay,
     draw_shop_overlay,
     load_menu_background_surface,
     load_menu_pixel_fonts,
+    main_menu_labels_and_icons,
 )
 from tour_teresina_golf.play_round import RoundOutcome, RoundSession, calc_stars
 from tour_teresina_golf.save_data import (
@@ -235,6 +240,7 @@ class GameScreen(Enum):
     VICTORY = auto()
     GAME_OVER = auto()
     PAUSED = auto()
+    POST_GAME_CREDITS = auto()
 
 
 def _make_fonts() -> tuple[pygame.font.Font, pygame.font.Font, pygame.font.Font, pygame.font.Font]:
@@ -248,6 +254,11 @@ def _make_fonts() -> tuple[pygame.font.Font, pygame.font.Font, pygame.font.Font,
 
 def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
     return pygame.Rect(0, 0, w, h).move(center_x - w // 2, center_y - h // 2)
+
+
+def _victory_fase3_credits_btn_rect() -> pygame.Rect:
+    """Botão pequeno CREDITOS no canto inferior direito do ecrã de vitória (fase 3)."""
+    return pygame.Rect(SCREEN_WIDTH - 118, SCREEN_HEIGHT - 52, 108, 36)
 
 
 def run() -> None:
@@ -270,9 +281,10 @@ def run() -> None:
     menu_btn_rects = compute_main_menu_button_rects()
     settings_rects = compute_settings_panel_rects()
     ranking_box_rect, ranking_back_rect = compute_ranking_panel_rects()
+    credits_box_rect, credits_back_rect = compute_credits_panel_rects()
+    menu_credits_chip_rect = compute_menu_credits_chip_rect()
     shop_box_rect, shop_item_rects, shop_back_rect = compute_shop_panel_rects(SKIN_CATALOG)
-    menu_labels = ("JOGAR", "CONFIGURACOES", "RANKING", "LOJA", "SAIR")
-    menu_icons = (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.COIN, MenuIcon.DOOR)
+    menu_labels, menu_icons = main_menu_labels_and_icons()
 
     save_data = load_save_data()
 
@@ -366,9 +378,14 @@ def run() -> None:
                         menu_panel = MenuPanel.MAIN
                     elif menu_panel == MenuPanel.SHOP:
                         menu_panel = MenuPanel.MAIN
+                    elif menu_panel == MenuPanel.CREDITS:
+                        menu_panel = MenuPanel.MAIN
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if menu_panel == MenuPanel.MAIN:
-                        if menu_btn_rects[0].collidepoint(ev_mx, ev_my):
+                        if menu_credits_chip_rect.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.CREDITS
+                        elif menu_btn_rects[0].collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
                             start_id = (
                                 START_LEVEL_ID
@@ -384,10 +401,10 @@ def run() -> None:
                         elif menu_btn_rects[2].collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
                             menu_panel = MenuPanel.RANKING
-                        elif menu_btn_rects[3].collidepoint(ev_mx, ev_my):
+                        elif MENU_SHOP_BUTTON_ENABLED and menu_btn_rects[3].collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
                             menu_panel = MenuPanel.SHOP
-                        elif menu_btn_rects[4].collidepoint(ev_mx, ev_my):
+                        elif menu_btn_rects[len(menu_labels) - 1].collidepoint(ev_mx, ev_my):
                             running = False
                     elif menu_panel == MenuPanel.SETTINGS:
                         if opt_toggle_fs_rect.collidepoint(ev_mx, ev_my):
@@ -419,6 +436,10 @@ def run() -> None:
                                         save_save_data(save_data)
                                         audio_stub.play_ui_confirm()
                                 break
+                    elif menu_panel == MenuPanel.CREDITS:
+                        if credits_back_rect.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.MAIN
 
             elif screen_state == GameScreen.PLAY and session is not None:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -432,7 +453,11 @@ def run() -> None:
             elif screen_state == GameScreen.VICTORY:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and session is not None:
                     lid = session.level.id
-                    if lid in _VICTORY_CONTINUE_TO:
+                    if lid == "fase3" and _victory_fase3_credits_btn_rect().collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        session = None
+                        screen_state = GameScreen.POST_GAME_CREDITS
+                    elif lid in _VICTORY_CONTINUE_TO:
                         if vic_r_next3.collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
                             nxt = _VICTORY_CONTINUE_TO.get(lid)
@@ -485,7 +510,15 @@ def run() -> None:
                         menu_panel = MenuPanel.MAIN
                         screen_state = GameScreen.MENU
 
-        mouse_logical = presenter.window_to_logical(pygame.mouse.get_pos())
+            elif screen_state == GameScreen.POST_GAME_CREDITS:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    screen_state = GameScreen.MENU
+                    menu_panel = MenuPanel.MAIN
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if credits_back_rect.collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        screen_state = GameScreen.MENU
+                        menu_panel = MenuPanel.MAIN
 
         if screen_state == GameScreen.PLAY and session is not None and session.rolling:
             phys_accum += dt
@@ -527,6 +560,7 @@ def run() -> None:
                     menu_labels,
                     menu_icons,
                 )
+                draw_menu_credits_chip(logical_screen, menu_credits_chip_rect)
             elif menu_panel == MenuPanel.SETTINGS:
                 draw_settings_overlay(
                     logical_screen,
@@ -556,6 +590,15 @@ def run() -> None:
                     SKIN_CATALOG,
                     save_data,
                 )
+            elif menu_panel == MenuPanel.CREDITS:
+                draw_credits_overlay(
+                    logical_screen,
+                    menu_font_title,
+                    menu_font_btn,
+                    menu_font_hint,
+                    credits_box_rect,
+                    credits_back_rect,
+                )
 
         elif screen_state == GameScreen.PLAY and session is not None:
             logical_screen.fill((28, 26, 32))
@@ -574,6 +617,23 @@ def run() -> None:
             elif session is not None:
                 logical_screen.blit(vic2_menu_s, vic_r_menu2.topleft)
                 logical_screen.blit(vic2_retry_s, vic_r_retry2.topleft)
+
+            if session is not None and session.level.id == "fase3":
+                vcr = _victory_fase3_credits_btn_rect()
+                pygame.draw.rect(logical_screen, (52, 92, 62), vcr, border_radius=8)
+                pygame.draw.rect(logical_screen, (130, 170, 120), vcr, width=2, border_radius=8)
+                tcred = menu_font_hint.render("CREDITOS", True, (240, 250, 235))
+                logical_screen.blit(tcred, tcred.get_rect(center=vcr.center))
+
+        elif screen_state == GameScreen.POST_GAME_CREDITS:
+            draw_credits_overlay(
+                logical_screen,
+                menu_font_title,
+                menu_font_btn,
+                menu_font_hint,
+                credits_box_rect,
+                credits_back_rect,
+            )
 
         elif screen_state == GameScreen.GAME_OVER:
             logical_screen.blit(defeat_bg, (0, 0))
