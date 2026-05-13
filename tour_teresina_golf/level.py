@@ -304,7 +304,7 @@ def make_fase1_level() -> Level:
     return Level(
         id="fase1",
         name="Av. Frei Serafim",
-        strokes=12,
+        strokes=5,
         ball_spawn=spawn,
         hole_center=hole,
         walls=walls,
@@ -358,7 +358,7 @@ def make_fase2_level() -> Level:
     return Level(
         id="fase2",
         name="Marginal e ponte",
-        strokes=14,
+        strokes=7,
         ball_spawn=spawn,
         hole_center=hole,
         walls=[],
@@ -433,7 +433,7 @@ def make_fase3_level() -> Level:
     return Level(
         id="fase3",
         name="Cais e passerelles",
-        strokes=14,
+        strokes=10,
         ball_spawn=spawn,
         hole_center=hole,
         walls=[],

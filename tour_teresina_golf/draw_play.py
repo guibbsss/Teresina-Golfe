@@ -25,8 +25,7 @@ from tour_teresina_golf.config import (
     MAX_DRAG_LEN,
 )
 from tour_teresina_golf.level import Level
-from tour_teresina_golf.play_round import RoundSession
-
+from tour_teresina_golf.play_round import RoundSession, calc_stars
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _FLAG_SCALED_CACHE: dict[tuple[str, int], pygame.Surface] = {}
@@ -143,6 +142,60 @@ def draw_aim(surface: pygame.Surface, session: RoundSession, mouse_pos: tuple[in
         pygame.draw.circle(surface, (255, 220, 140), (int(px), int(py)), 3)
 
 
+def _star_outer_radius_px(font: pygame.font.Font) -> int:
+    h = max(font.get_height(), font.get_linesize())
+    return max(7, int(h * 0.38))
+
+
+def _five_point_star_points(cx: float, cy: float, outer: float) -> list[tuple[int, int]]:
+    inner = outer * 0.42
+    pts: list[tuple[int, int]] = []
+    for i in range(10):
+        ang = -math.pi / 2 + i * (math.pi / 5)
+        rad = outer if i % 2 == 0 else inner
+        pts.append((int(cx + math.cos(ang) * rad), int(cy + math.sin(ang) * rad)))
+    return pts
+
+
+def _draw_star_shape(
+    surface: pygame.Surface,
+    cx: int,
+    cy: int,
+    outer_r: int,
+    *,
+    filled: bool,
+    fill_color: tuple[int, int, int],
+    outline_color: tuple[int, int, int],
+) -> None:
+    pts = _five_point_star_points(float(cx), float(cy), float(outer_r))
+    w_line = max(1, outer_r // 5)
+    if filled:
+        pygame.draw.polygon(surface, fill_color, pts)
+        pygame.draw.polygon(
+            surface,
+            (min(255, fill_color[0] + 35), min(255, fill_color[1] + 25), min(255, fill_color[2] + 20)),
+            pts,
+            width=1,
+        )
+    else:
+        pygame.draw.polygon(surface, outline_color, pts, width=w_line)
+
+
+def draw_stars(surface: pygame.Surface, font: pygame.font.Font, stars: int, center_x: int, y: int) -> None:
+    """Três estrelas (polígono) centradas em center_x; `stars` (1–3) é limitado a esse intervalo."""
+    n = min(3, max(1, int(stars)))
+    outer = _star_outer_radius_px(font)
+    gap = max(4, outer // 3)
+    slot = 2 * outer + gap
+    total_w = 3 * slot - gap
+    x0 = center_x - total_w // 2 + outer
+    cy = y + outer + 2
+    gold = (255, 214, 80)
+    dim = (100, 90, 60)
+    for i in range(3):
+        _draw_star_shape(surface, x0 + i * slot, cy, outer, filled=i < n, fill_color=gold, outline_color=dim)
+
+
 def draw_hud(surface: pygame.Surface, font: pygame.font.Font, session: RoundSession) -> None:
     """Painel único no canto superior esquerdo (evita sobrepor tacadas com nome da fase)."""
     pad = 12
@@ -152,11 +205,58 @@ def draw_hud(surface: pygame.Surface, font: pygame.font.Font, session: RoundSess
     line2 = f"Fase: {session.level.name}"
     t_left = font.render(line1, True, COLOR_UI_TEXT)
     t_phase = font.render(line2, True, COLOR_UI_ACCENT)
-    bw = max(t_left.get_width(), t_phase.get_width()) + inner * 2
-    bh = t_left.get_height() + gap + t_phase.get_height() + inner * 2
+    if session.strokes_left == 0 and not session.hole_victory_ready():
+        preview_fill = 0
+    else:
+        preview_fill = calc_stars(session.strokes_left)
+    t_rank_label = font.render("Ranking atual: ", True, COLOR_UI_ACCENT)
+    outer = _star_outer_radius_px(font)
+    gap = max(4, outer // 3)
+    slot = 2 * outer + gap
+    stars_w = 3 * slot - gap
+    line3_w = t_rank_label.get_width() + stars_w
+    line3_h = max(t_rank_label.get_height(), 2 * outer + 4)
+    bw = max(t_left.get_width(), t_phase.get_width(), line3_w) + inner * 2
+    bh = t_left.get_height() + gap + t_phase.get_height() + gap + line3_h + inner * 2
     bg = pygame.Surface((bw, bh), pygame.SRCALPHA)
     bg.fill((16, 14, 22, 228))
     pygame.draw.rect(bg, (90, 82, 100), bg.get_rect(), width=1, border_radius=6)
     surface.blit(bg, (pad, pad))
     surface.blit(t_left, (pad + inner, pad + inner))
     surface.blit(t_phase, (pad + inner, pad + inner + t_left.get_height() + gap))
+    y3 = pad + inner + t_left.get_height() + gap + t_phase.get_height() + gap
+    label_y = y3 + (line3_h - t_rank_label.get_height()) // 2
+    surface.blit(t_rank_label, (pad + inner, label_y))
+    gold = (255, 214, 80)
+    dim = (100, 90, 60)
+    x0 = pad + inner + t_rank_label.get_width() + outer
+    cy = y3 + line3_h // 2
+    for i in range(3):
+        _draw_star_shape(surface, x0 + i * slot, cy, outer, filled=i < preview_fill, fill_color=gold, outline_color=dim)
+
+
+def draw_pause_overlay(
+    surface: pygame.Surface,
+    font_title: pygame.font.Font,
+    font_ui: pygame.font.Font,
+    btn_continuar: pygame.Rect,
+    btn_menu: pygame.Rect,
+) -> None:
+    veil = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    veil.fill((10, 10, 20, 172))
+    surface.blit(veil, (0, 0))
+
+    cx = surface.get_width() // 2
+    cy = surface.get_height() // 2
+
+    t = font_title.render("PAUSADO", True, (230, 240, 255))
+    surface.blit(t, t.get_rect(center=(cx, cy - 56)))
+
+    for rect, label in (
+        (btn_continuar, "Continuar"),
+        (btn_menu, "Sair para o Menu"),
+    ):
+        pygame.draw.rect(surface, (38, 52, 72), rect, border_radius=8)
+        pygame.draw.rect(surface, (100, 130, 180), rect, width=2, border_radius=8)
+        tx = font_ui.render(label, True, (220, 230, 255))
+        surface.blit(tx, tx.get_rect(center=rect.center))

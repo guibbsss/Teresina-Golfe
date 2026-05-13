@@ -36,6 +36,15 @@ class RoundOutcome(Enum):
     WATER_RESPAWN = auto()
 
 
+def calc_stars(strokes_left: int) -> int:
+    """Com 5 tacadas/fase: >=4 sobrando = 3 estrelas; 2–3 sobrando = 2; 0–1 = 1."""
+    if strokes_left >= 4:
+        return 3
+    if strokes_left >= 2:
+        return 2
+    return 1
+
+
 def _speed_sq(vx: float, vy: float) -> float:
     return vx * vx + vy * vy
 
@@ -101,6 +110,10 @@ class RoundSession:
             return False
         win_sq = self.level.hole_win_speed_sq if self.level.hole_win_speed_sq is not None else HOLE_WIN_SPEED_SQ
         return _speed_sq(self.ball_vx, self.ball_vy) < win_sq
+
+    def hole_victory_ready(self) -> bool:
+        """True se a bola cumpre posição e velocidade para vitória no buraco (só leitura, para UI)."""
+        return self._check_hole_victory()
 
     def physics_step(self, dt: float) -> RoundOutcome:
         self.ball_x += self.ball_vx * dt
