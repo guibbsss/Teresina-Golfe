@@ -10,7 +10,7 @@ SCREEN_HEIGHT = LOGICAL_H
 TITLE = "Tour Teresina Golf"
 
 # Desenvolvimento: True desenha retângulos de colisão da fase a vermelho durante o jogo
-DEBUG_DRAW_PHASE_COLLISIONS = True
+DEBUG_DRAW_PHASE_COLLISIONS = False
 
 # Nível ao clicar «Jogar» no menu: None ou "fase1" = começar na fase 1; "fase2" / "fase3" para testes.
 # Também podes usar: python main.py fase3
