@@ -22,6 +22,7 @@ from tour_teresina_golf.draw_play import (
     draw_hud,
     draw_playfield,
     draw_programmatic_hole_and_flag,
+    draw_stars,
 )
 from tour_teresina_golf.intro_screen import IntroState
 from tour_teresina_golf.config import START_LEVEL_ID
@@ -41,7 +42,7 @@ from tour_teresina_golf.main_menu_ui import (
     load_menu_background_surface,
     load_menu_pixel_fonts,
 )
-from tour_teresina_golf.play_round import RoundOutcome, RoundSession
+from tour_teresina_golf.play_round import RoundOutcome, RoundSession, calc_stars
 from tour_teresina_golf.settings import load_settings, save_settings
 from tour_teresina_golf.video import DisplayPresenter
 
@@ -97,6 +98,7 @@ def run() -> None:
     clock = pygame.time.Clock()
 
     font_title, font_sub, font_ui, font_ui_big = _make_fonts()
+    font_stars = pygame.font.SysFont("consolas", 36)
 
     menu_bg, _ = load_menu_background_surface()
     menu_font_title, menu_font_btn, menu_font_hint = load_menu_pixel_fonts()
@@ -113,6 +115,7 @@ def run() -> None:
     phys_accum = 0.0
     game_over_reason: str = ""
     strokes_used_victory = 0
+    stars_victory = 0
 
     go_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 56, 260, 48)
     go_retry_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 116, 260, 48)
@@ -264,6 +267,7 @@ def run() -> None:
                 out = session.physics_step(FIXED_DT)
                 if out == RoundOutcome.VICTORY:
                     strokes_used_victory = session.level.strokes - session.strokes_left
+                    stars_victory = calc_stars(session.strokes_left)
                     screen_state = GameScreen.VICTORY
                     break
                 if out == RoundOutcome.GAME_OVER_WATER:
@@ -321,7 +325,9 @@ def run() -> None:
             t = font_title.render("Buraco!", True, (200, 255, 190))
             logical_screen.blit(t, t.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 48)))
             info = font_ui_big.render(f"Tacadas usadas: {strokes_used_victory}", True, (220, 235, 210))
-            logical_screen.blit(info, info.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 8)))
+            info_rect = info.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 8))
+            logical_screen.blit(info, info_rect)
+            draw_stars(logical_screen, font_stars, stars_victory, SCREEN_WIDTH // 2, info_rect.bottom + 12)
 
             vic_cont, vic_menu_rect, vic_retry_rect = (
                 _victory_button_rects(session.level.id) if session is not None else (None, pygame.Rect(0, 0, 0, 0), pygame.Rect(0, 0, 0, 0))
