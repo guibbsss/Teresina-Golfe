@@ -37,10 +37,10 @@ class RoundOutcome(Enum):
 
 
 def calc_stars(strokes_left: int) -> int:
-    """Estrelas (1–3) a partir das tacadas restantes na vitória: >=7 três, 5–6 duas, <5 uma."""
-    if strokes_left >= 7:
+    """Com 5 tacadas/fase: >=4 sobrando = 3 estrelas; 2–3 sobrando = 2; 0–1 = 1."""
+    if strokes_left >= 4:
         return 3
-    if strokes_left >= 5:
+    if strokes_left >= 2:
         return 2
     return 1
 

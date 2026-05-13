@@ -24,7 +24,7 @@ PHYS_ACCUM_LIMIT = 256
 
 # Bola
 BALL_RADIUS = 6
-MAX_SPEED = 2800.0
+MAX_SPEED = 1100.0
 RESTITUTION = 0.72
 FRICTION_PER_SEC = 2.15
 
@@ -33,14 +33,14 @@ AIM_GRAB_RADIUS = 52
 MIN_DRAG_SHOT = 4  # deadzone (px); abaixo disto cancela sem tacada
 MAX_DRAG_LEN = 220
 # Antigo teto: MAX_DRAG_LEN * POWER_SCALE ≈ 3190 px/s de magnitude inicial
-MAX_SHOT_SPEED = MAX_DRAG_LEN * 14.5
+MAX_SHOT_SPEED = 1000.0
 
 # Buraco
 HOLE_CAPTURE_RADIUS = 22
 # Paragem numérica (bola “idle” para pegar na mão / proxima tacada)
 STOP_SPEED_SQ = 24.0 * 24.0
 # Vitória com bola ainda a mover-se lentamente dentro do raio (GDD: velocidade baixa)
-HOLE_WIN_SPEED_SQ = 85.0 * 85.0
+HOLE_WIN_SPEED_SQ = 50.0 * 50.0
 
 # Cores — gameplay placeholder alinhado a moodboard urbano / verde (sec. 6 GDD)
 COLOR_BG_TOP = (255, 178, 102)
