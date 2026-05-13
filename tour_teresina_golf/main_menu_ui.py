@@ -9,6 +9,7 @@ from pathlib import Path
 import pygame
 
 from tour_teresina_golf.config import SCREEN_HEIGHT, SCREEN_WIDTH
+from tour_teresina_golf.save_data import SaveData
 
 # Paleta alinhada ao mockup (verdes dos botões)
 MENU_BTN_FILL = (26, 67, 20)
@@ -169,9 +170,11 @@ def compute_settings_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
 
 
 def compute_ranking_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
-    """Caixa central e botão Voltar."""
-    box = pygame.Rect(SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 - 90, 400, 180)
-    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 36, 200, 44)
+    """Caixa quase à largura do ecrã lógico (960px) para nomes longos sem truncar."""
+    panel_w = min(940, SCREEN_WIDTH - 20)
+    panel_h = 280
+    box = pygame.Rect(SCREEN_WIDTH // 2 - panel_w // 2, SCREEN_HEIGHT // 2 - 140, panel_w, panel_h)
+    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 18, 200, 44)
     return box, back
 
 
@@ -260,12 +263,40 @@ def draw_settings_overlay(
     surf.blit(t_back, t_back.get_rect(center=opt_back_rect.center))
 
 
+def _five_point_star_points(cx: float, cy: float, outer: float) -> list[tuple[int, int]]:
+    inner = outer * 0.42
+    pts: list[tuple[int, int]] = []
+    for i in range(10):
+        ang = -math.pi / 2 + i * (math.pi / 5)
+        rad = outer if i % 2 == 0 else inner
+        pts.append((int(cx + math.cos(ang) * rad), int(cy + math.sin(ang) * rad)))
+    return pts
+
+
+def _fit_label_surface(
+    font: pygame.font.Font, text: str, max_width: int, color: tuple[int, int, int]
+) -> pygame.Surface:
+    """Texto truncado com '...' se exceder a largura máxima (evita sobrepor a coluna direita)."""
+    surf = font.render(text, True, color)
+    if surf.get_width() <= max_width:
+        return surf
+    ell = "..."
+    t = text
+    while len(t) > 0:
+        surf = font.render(t + ell, True, color)
+        if surf.get_width() <= max_width:
+            return surf
+        t = t[:-1]
+    return font.render(ell, True, color)
+
+
 def draw_ranking_overlay(
     surf: pygame.Surface,
     font_title: pygame.font.Font,
     font_ui: pygame.font.Font,
     box_rect: pygame.Rect,
     back_rect: pygame.Rect,
+    save_data: SaveData,
 ) -> None:
     veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     veil.fill((10, 14, 18, 145))
@@ -275,10 +306,67 @@ def draw_ranking_overlay(
     pygame.draw.rect(surf, MENU_BTN_BORDER, box_rect, width=3, border_radius=14)
 
     t = font_title.render("RANKING", True, MENU_BTN_TEXT)
-    surf.blit(t, t.get_rect(midtop=(box_rect.centerx, box_rect.top + 24)))
+    surf.blit(t, t.get_rect(midtop=(box_rect.centerx, box_rect.top + 18)))
 
-    msg = font_ui.render("Em breve", True, (220, 215, 200))
-    surf.blit(msg, msg.get_rect(center=(box_rect.centerx, box_rect.centery + 8)))
+    phase_info = (
+        ("fase1", "1 - Av. Frei Serafim"),
+        ("fase2", "2 - Ponte Estaiada"),
+        ("fase3", "3 - Encontro dos Rios"),
+    )
+    gold = (255, 214, 80)
+    dim = (100, 90, 60)
+    text_c = (220, 215, 200)
+    muted = (160, 150, 130)
+    row_y = box_rect.top + 54
+    row_h = 58
+    left_pad = 14
+    right_pad = 12
+    r_col_w = 176
+    after_label_gap = 22
+    # Bordo esquerdo mínimo da coluna resultado (encostado à direita da caixa)
+    result_col_left_max = box_rect.right - right_pad - r_col_w
+    label_x = box_rect.left + left_pad
+    max_label_w = max(160, result_col_left_max - label_x - after_label_gap)
+
+    for pid, label in phase_info:
+        rec = getattr(save_data, pid, None)
+        stars_val = rec.stars if rec is not None else 0
+        strokes_used = rec.strokes_used if rec is not None else 999
+
+        full = f"Fase {label}"
+        t_label = _fit_label_surface(font_ui, full, max_label_w, text_c)
+        surf.blit(t_label, (label_x, row_y + (row_h - t_label.get_height()) // 2))
+
+        label_right = label_x + t_label.get_width()
+        stars_zone_left = min(label_right + after_label_gap, result_col_left_max)
+
+        zone_cx = stars_zone_left + r_col_w // 2
+        row_cy = row_y + row_h // 2
+
+        if stars_val == 0:
+            t_none = font_ui.render("Nao jogada", True, muted)
+            surf.blit(t_none, t_none.get_rect(center=(zone_cx, row_cy)))
+        else:
+            outer = max(6, font_ui.get_height() // 3)
+            pitch = max(3, outer // 3)
+            slot = 2 * outer + pitch
+            total_sw = 3 * slot - pitch
+            sx0 = zone_cx - total_sw // 2 + outer
+            cy_s = row_cy - 8
+            for i in range(3):
+                filled = i < stars_val
+                cx_s = sx0 + i * slot
+                pts = _five_point_star_points(float(cx_s), float(cy_s), float(outer))
+                w_line = max(1, outer // 5)
+                if filled:
+                    pygame.draw.polygon(surf, gold, pts)
+                else:
+                    pygame.draw.polygon(surf, dim, pts, width=w_line)
+            if strokes_used < 900:
+                t_st = font_ui.render(f"{strokes_used} tacadas", True, muted)
+                surf.blit(t_st, t_st.get_rect(midtop=(zone_cx, cy_s + outer + 8)))
+
+        row_y += row_h
 
     pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
     pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)

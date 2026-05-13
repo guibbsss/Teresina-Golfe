@@ -20,6 +20,7 @@ from tour_teresina_golf.draw_play import (
     draw_aim,
     draw_ball,
     draw_hud,
+    draw_pause_overlay,
     draw_playfield,
     draw_programmatic_hole_and_flag,
     draw_stars,
@@ -43,6 +44,7 @@ from tour_teresina_golf.main_menu_ui import (
     load_menu_pixel_fonts,
 )
 from tour_teresina_golf.play_round import RoundOutcome, RoundSession, calc_stars
+from tour_teresina_golf.save_data import load_save_data, save_save_data, update_best_score
 from tour_teresina_golf.settings import load_settings, save_settings
 from tour_teresina_golf.video import DisplayPresenter
 
@@ -53,6 +55,7 @@ class GameScreen(Enum):
     PLAY = auto()
     VICTORY = auto()
     GAME_OVER = auto()
+    PAUSED = auto()
 
 
 def _make_fonts() -> tuple[pygame.font.Font, pygame.font.Font, pygame.font.Font, pygame.font.Font]:
@@ -109,6 +112,8 @@ def run() -> None:
     menu_labels = ("JOGAR", "CONFIGURACOES", "RANKING", "SAIR")
     menu_icons = (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.DOOR)
 
+    save_data = load_save_data()
+
     screen_state = GameScreen.INTRO
     intro = IntroState(menu_bg)
     session: RoundSession | None = None
@@ -119,6 +124,9 @@ def run() -> None:
 
     go_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 56, 260, 48)
     go_retry_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 116, 260, 48)
+
+    pause_continuar_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 24, 280, 48)
+    pause_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 84, 260, 44)
 
     running = True
     while running:
@@ -221,8 +229,7 @@ def run() -> None:
                     session.release_shot(ev_mx, ev_my)
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     session.cancel_aim()
-                    menu_panel = MenuPanel.MAIN
-                    screen_state = GameScreen.MENU
+                    screen_state = GameScreen.PAUSED
 
             elif screen_state == GameScreen.VICTORY:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and session is not None:
@@ -256,6 +263,19 @@ def run() -> None:
                         phys_accum = 0.0
                         screen_state = GameScreen.PLAY
 
+            elif screen_state == GameScreen.PAUSED and session is not None:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    screen_state = GameScreen.PLAY
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if pause_continuar_rect.collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        screen_state = GameScreen.PLAY
+                    elif pause_menu_rect.collidepoint(ev_mx, ev_my):
+                        audio_stub.play_ui_confirm()
+                        session.cancel_aim()
+                        menu_panel = MenuPanel.MAIN
+                        screen_state = GameScreen.MENU
+
         mouse_logical = presenter.window_to_logical(pygame.mouse.get_pos())
 
         if screen_state == GameScreen.PLAY and session is not None and session.rolling:
@@ -268,6 +288,8 @@ def run() -> None:
                 if out == RoundOutcome.VICTORY:
                     strokes_used_victory = session.level.strokes - session.strokes_left
                     stars_victory = calc_stars(session.strokes_left)
+                    if update_best_score(save_data, session.level.id, stars_victory, strokes_used_victory):
+                        save_save_data(save_data)
                     screen_state = GameScreen.VICTORY
                     break
                 if out == RoundOutcome.GAME_OVER_WATER:
@@ -310,6 +332,7 @@ def run() -> None:
                     menu_font_btn,
                     ranking_box_rect,
                     ranking_back_rect,
+                    save_data,
                 )
 
         elif screen_state == GameScreen.PLAY and session is not None:
@@ -355,6 +378,20 @@ def run() -> None:
                 pygame.draw.rect(logical_screen, (160, 110, 100), rect, width=2, border_radius=8)
                 tx = font_ui.render(label, True, (255, 235, 230))
                 logical_screen.blit(tx, tx.get_rect(center=rect.center))
+
+        elif screen_state == GameScreen.PAUSED and session is not None:
+            logical_screen.fill((28, 26, 32))
+            draw_playfield(logical_screen, session.level)
+            draw_ball(logical_screen, session.ball_x, session.ball_y)
+            draw_programmatic_hole_and_flag(logical_screen, session.level)
+            draw_hud(logical_screen, font_ui, session)
+            draw_pause_overlay(
+                logical_screen,
+                font_title,
+                font_ui,
+                pause_continuar_rect,
+                pause_menu_rect,
+            )
 
         presenter.present(logical_screen, physical_screen)
         pygame.display.flip()

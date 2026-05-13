@@ -233,3 +233,30 @@ def draw_hud(surface: pygame.Surface, font: pygame.font.Font, session: RoundSess
     cy = y3 + line3_h // 2
     for i in range(3):
         _draw_star_shape(surface, x0 + i * slot, cy, outer, filled=i < preview_fill, fill_color=gold, outline_color=dim)
+
+
+def draw_pause_overlay(
+    surface: pygame.Surface,
+    font_title: pygame.font.Font,
+    font_ui: pygame.font.Font,
+    btn_continuar: pygame.Rect,
+    btn_menu: pygame.Rect,
+) -> None:
+    veil = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    veil.fill((10, 10, 20, 172))
+    surface.blit(veil, (0, 0))
+
+    cx = surface.get_width() // 2
+    cy = surface.get_height() // 2
+
+    t = font_title.render("PAUSADO", True, (230, 240, 255))
+    surface.blit(t, t.get_rect(center=(cx, cy - 56)))
+
+    for rect, label in (
+        (btn_continuar, "Continuar"),
+        (btn_menu, "Sair para o Menu"),
+    ):
+        pygame.draw.rect(surface, (38, 52, 72), rect, border_radius=8)
+        pygame.draw.rect(surface, (100, 130, 180), rect, width=2, border_radius=8)
+        tx = font_ui.render(label, True, (220, 230, 255))
+        surface.blit(tx, tx.get_rect(center=rect.center))
