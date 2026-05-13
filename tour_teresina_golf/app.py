@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum, auto
+from pathlib import Path
 
 import pygame
 
@@ -47,6 +48,91 @@ from tour_teresina_golf.play_round import RoundOutcome, RoundSession, calc_stars
 from tour_teresina_golf.save_data import load_save_data, save_save_data, update_best_score
 from tour_teresina_golf.settings import load_settings, save_settings
 from tour_teresina_golf.video import DisplayPresenter
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Posições (canto sup. esquerdo) no canvas de layout onde os botões foram alinhados (ex.: Figma 1920×1080).
+# Não usar o tamanho do PNG de fundo: a arte pode ser 1024×576, 1672×941, etc., e as coordenadas deixam de bater.
+_DEFEAT_LAYOUT_W = 1920
+_DEFEAT_LAYOUT_H = 1080
+_DEFEAT_BTN_MENU_LAYOUT = (400, 881)
+_DEFEAT_BTN_RETRY_LAYOUT = (1250, 850)
+_DEFEAT_BTN_GAP = 16
+
+
+def _load_game_over_assets() -> tuple[pygame.Surface, pygame.Surface, pygame.Surface, pygame.Rect, pygame.Rect]:
+    """Fundo preenche LOGICAL_W×LOGICAL_H; botões mapeados desde o canvas de layout e encaixados no ecrã."""
+    bg_native = pygame.image.load(str(_REPO_ROOT / "telas" / "Tela de Derrota.png")).convert()
+    nw, nh = bg_native.get_size()
+    bg = pygame.transform.smoothscale(bg_native, (LOGICAL_W, LOGICAL_H))
+
+    lx = LOGICAL_W / float(_DEFEAT_LAYOUT_W)
+    ly = LOGICAL_H / float(_DEFEAT_LAYOUT_H)
+
+    menu_native = pygame.image.load(str(_REPO_ROOT / "botoes" / "Voltar_ao_Menu-removebg-preview.png")).convert_alpha()
+    retry_native = pygame.image.load(str(_REPO_ROOT / "botoes" / "Reiniciar_Fase-removebg-preview.png")).convert_alpha()
+    mw, mh = menu_native.get_size()
+
+    bw0 = max(1, int(round(mw * lx)))
+    bh0 = max(1, int(round(mh * ly)))
+    mxl, myl = _DEFEAT_BTN_MENU_LAYOUT
+    rxl, ryl = _DEFEAT_BTN_RETRY_LAYOUT
+    mx = int(round(mxl * lx))
+    my = int(round(myl * ly))
+    rx = int(round(rxl * lx))
+    ry = int(round(ryl * ly))
+
+    # Encaixe horizontal: não ultrapassar a direita nem sobrepor o espaço entre os dois botões.
+    gap = _DEFEAT_BTN_GAP
+    shrink = 1.0
+    if rx + bw0 > LOGICAL_W - gap:
+        shrink = min(shrink, (LOGICAL_W - gap - rx) / float(bw0))
+    if mx + bw0 > rx - gap:
+        shrink = min(shrink, max(0.1, (rx - gap - mx) / float(bw0)))
+    bw = max(1, int(round(bw0 * shrink)))
+    bh = max(1, int(round(bh0 * shrink)))
+
+    menu_s = pygame.transform.smoothscale(menu_native, (bw, bh))
+    retry_s = pygame.transform.smoothscale(retry_native, (bw, bh))
+
+    menu_rect = pygame.Rect(mx, my, bw, bh)
+    retry_rect = pygame.Rect(rx, ry, bw, bh)
+
+    margin = 8
+
+    # Retry: garantir que não ultrapassa a direita (referência para a simetria).
+    if retry_rect.right > LOGICAL_W - margin:
+        retry_rect.x = LOGICAL_W - margin - retry_rect.w
+    retry_rect.x = max(margin, retry_rect.x)
+
+    # Simetria horizontal: margem esquerda até ao menu = margem direita após o retry.
+    # No layout 1920: margem_dir = 1920 - (x_retry + L); em lógico: LOGICAL_W - retry_rect.right.
+    menu_rect.x = LOGICAL_W - retry_rect.right
+    menu_rect.x = max(margin, menu_rect.x)
+    if menu_rect.right + gap > retry_rect.x:
+        retry_rect.x = min(retry_rect.x, LOGICAL_W - margin - retry_rect.w)
+        retry_rect.x = max(menu_rect.right + gap, retry_rect.x)
+        if retry_rect.right > LOGICAL_W - margin:
+            retry_rect.x = LOGICAL_W - margin - retry_rect.w
+        menu_rect.x = max(margin, LOGICAL_W - retry_rect.right)
+
+    # Mesma linha: bases alinhadas (max dos bottoms desejados no layout, sem ultrapassar o ecrã).
+    bottom = min(LOGICAL_H - margin, max(my + bh, ry + bh))
+    y_common = max(margin, bottom - bh)
+    menu_rect.y = y_common
+    retry_rect.y = y_common
+
+    for r in (menu_rect, retry_rect):
+        if r.bottom > LOGICAL_H - margin:
+            dy = (LOGICAL_H - margin) - r.bottom
+            menu_rect.y += dy
+            retry_rect.y += dy
+        if r.y < margin:
+            dy = margin - r.y
+            menu_rect.y += dy
+            retry_rect.y += dy
+
+    return bg, menu_s, retry_s, menu_rect, retry_rect
 
 
 class GameScreen(Enum):
@@ -122,8 +208,7 @@ def run() -> None:
     strokes_used_victory = 0
     stars_victory = 0
 
-    go_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 56, 260, 48)
-    go_retry_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 116, 260, 48)
+    defeat_bg, defeat_btn_menu, defeat_btn_retry, go_menu_rect, go_retry_rect = _load_game_over_assets()
 
     pause_continuar_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 24, 280, 48)
     pause_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 84, 260, 44)
@@ -367,17 +452,13 @@ def run() -> None:
                 logical_screen.blit(tx, tx.get_rect(center=rect.center))
 
         elif screen_state == GameScreen.GAME_OVER:
-            logical_screen.fill((42, 28, 28))
-            t = font_title.render("Game Over", True, (255, 190, 190))
-            logical_screen.blit(t, t.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 48)))
-            r = font_ui_big.render(game_over_reason, True, (235, 210, 210))
-            logical_screen.blit(r, r.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 8)))
-
-            for rect, label in ((go_menu_rect, "Menu"), (go_retry_rect, "Reiniciar fase")):
-                pygame.draw.rect(logical_screen, (72, 48, 48), rect, border_radius=8)
-                pygame.draw.rect(logical_screen, (160, 110, 100), rect, width=2, border_radius=8)
-                tx = font_ui.render(label, True, (255, 235, 230))
-                logical_screen.blit(tx, tx.get_rect(center=rect.center))
+            logical_screen.blit(defeat_bg, (0, 0))
+            logical_screen.blit(defeat_btn_menu, go_menu_rect.topleft)
+            logical_screen.blit(defeat_btn_retry, go_retry_rect.topleft)
+            # Arte de derrota fala em tacadas; água usa outro motivo — uma linha discreta.
+            if "água" in game_over_reason.lower():
+                hint = font_ui.render(game_over_reason, True, (220, 235, 255))
+                logical_screen.blit(hint, hint.get_rect(midbottom=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 10)))
 
         elif screen_state == GameScreen.PAUSED and session is not None:
             logical_screen.fill((28, 26, 32))
