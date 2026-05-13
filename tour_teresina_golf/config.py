@@ -10,7 +10,7 @@ SCREEN_HEIGHT = LOGICAL_H
 TITLE = "Tour Teresina Golf"
 
 # Desenvolvimento: True desenha retângulos de colisão da fase a vermelho durante o jogo
-DEBUG_DRAW_PHASE_COLLISIONS = True
+DEBUG_DRAW_PHASE_COLLISIONS = False
 
 # Nível ao clicar «Jogar» no menu: None ou "fase1" = começar na fase 1; "fase2" / "fase3" para testes.
 # Também podes usar: python main.py fase3
@@ -61,3 +61,12 @@ COLOR_UI_ACCENT = (255, 214, 120)
 # Intro / UI
 INTRO_TITLE_COLOR = (255, 235, 200)
 INTRO_SUB_COLOR = (255, 200, 140)
+
+COINS_PER_STAR = 50
+
+SKIN_CATALOG: list[tuple[str, str, int]] = [
+    ("default", "Bola Padrao", 0),
+    ("capivara", "Bola Capivara", 100),
+    ("sol40", "Bola Sol de 40", 200),
+    ("brfc", "Bola B-R-O FC", 300),
+]

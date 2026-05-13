@@ -14,6 +14,8 @@ from tour_teresina_golf.config import (
     PHYS_ACCUM_LIMIT,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
+    SKIN_CATALOG,
+    START_LEVEL_ID,
     TITLE,
 )
 from tour_teresina_golf.draw_play import (
@@ -26,27 +28,35 @@ from tour_teresina_golf.draw_play import (
     draw_stars,
 )
 from tour_teresina_golf.intro_screen import IntroState
-from tour_teresina_golf.config import START_LEVEL_ID
 from tour_teresina_golf.level import make_level_by_id
-
-_VICTORY_CONTINUE_TO: dict[str, str] = {"fase1": "fase2", "fase2": "fase3"}
 from tour_teresina_golf.main_menu_ui import (
     MenuIcon,
     MenuPanel,
     compute_main_menu_button_rects,
     compute_ranking_panel_rects,
     compute_settings_panel_rects,
+    compute_shop_panel_rects,
     draw_main_menu_buttons,
     draw_menu_background,
     draw_ranking_overlay,
     draw_settings_overlay,
+    draw_shop_overlay,
     load_menu_background_surface,
     load_menu_pixel_fonts,
 )
 from tour_teresina_golf.play_round import RoundOutcome, RoundSession, calc_stars
-from tour_teresina_golf.save_data import load_save_data, save_save_data, update_best_score
+from tour_teresina_golf.save_data import (
+    award_coins,
+    load_save_data,
+    purchase_skin,
+    save_save_data,
+    set_active_skin,
+    update_best_score,
+)
 from tour_teresina_golf.settings import load_settings, save_settings
 from tour_teresina_golf.video import DisplayPresenter
+
+_VICTORY_CONTINUE_TO: dict[str, str] = {"fase1": "fase2", "fase2": "fase3"}
 
 
 class GameScreen(Enum):
@@ -74,7 +84,7 @@ def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
 def _victory_button_rects(level_id: str) -> tuple[pygame.Rect | None, pygame.Rect, pygame.Rect]:
     """Continuar (fase1→2, fase2→3), Menu, Jogar novamente."""
     cx = SCREEN_WIDTH // 2
-    cy = SCREEN_HEIGHT // 2
+    cy = SCREEN_HEIGHT // 2 + 20
     if level_id in _VICTORY_CONTINUE_TO:
         return (
             _button_rect(cx, cy + 24, 280, 44),
@@ -109,8 +119,9 @@ def run() -> None:
     menu_btn_rects = compute_main_menu_button_rects()
     settings_rects = compute_settings_panel_rects()
     ranking_box_rect, ranking_back_rect = compute_ranking_panel_rects()
-    menu_labels = ("JOGAR", "CONFIGURACOES", "RANKING", "SAIR")
-    menu_icons = (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.DOOR)
+    shop_box_rect, shop_item_rects, shop_back_rect = compute_shop_panel_rects(SKIN_CATALOG)
+    menu_labels = ("JOGAR", "CONFIGURACOES", "RANKING", "LOJA", "SAIR")
+    menu_icons = (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.COIN, MenuIcon.DOOR)
 
     save_data = load_save_data()
 
@@ -121,6 +132,7 @@ def run() -> None:
     game_over_reason: str = ""
     strokes_used_victory = 0
     stars_victory = 0
+    coins_earned_victory = 0
 
     go_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 56, 260, 48)
     go_retry_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 116, 260, 48)
@@ -189,6 +201,8 @@ def run() -> None:
                         menu_panel = MenuPanel.MAIN
                     elif menu_panel == MenuPanel.RANKING:
                         menu_panel = MenuPanel.MAIN
+                    elif menu_panel == MenuPanel.SHOP:
+                        menu_panel = MenuPanel.MAIN
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if menu_panel == MenuPanel.MAIN:
                         if menu_btn_rects[0].collidepoint(ev_mx, ev_my):
@@ -208,6 +222,9 @@ def run() -> None:
                             audio_stub.play_ui_confirm()
                             menu_panel = MenuPanel.RANKING
                         elif menu_btn_rects[3].collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.SHOP
+                        elif menu_btn_rects[4].collidepoint(ev_mx, ev_my):
                             running = False
                     elif menu_panel == MenuPanel.SETTINGS:
                         if opt_toggle_fs_rect.collidepoint(ev_mx, ev_my):
@@ -221,6 +238,24 @@ def run() -> None:
                         if ranking_back_rect.collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
                             menu_panel = MenuPanel.MAIN
+                    elif menu_panel == MenuPanel.SHOP:
+                        if shop_back_rect.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.MAIN
+                        else:
+                            for rect, (skin_id, _name, cost) in zip(shop_item_rects, SKIN_CATALOG[1:]):
+                                if not rect.collidepoint(ev_mx, ev_my):
+                                    continue
+                                if skin_id in save_data.unlocked_skins:
+                                    if save_data.active_skin != skin_id:
+                                        set_active_skin(save_data, skin_id)
+                                        save_save_data(save_data)
+                                        audio_stub.play_ui_confirm()
+                                else:
+                                    if purchase_skin(save_data, skin_id, cost):
+                                        save_save_data(save_data)
+                                        audio_stub.play_ui_confirm()
+                                break
 
             elif screen_state == GameScreen.PLAY and session is not None:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -288,8 +323,9 @@ def run() -> None:
                 if out == RoundOutcome.VICTORY:
                     strokes_used_victory = session.level.strokes - session.strokes_left
                     stars_victory = calc_stars(session.strokes_left)
-                    if update_best_score(save_data, session.level.id, stars_victory, strokes_used_victory):
-                        save_save_data(save_data)
+                    update_best_score(save_data, session.level.id, stars_victory, strokes_used_victory)
+                    coins_earned_victory = award_coins(save_data, stars_victory)
+                    save_save_data(save_data)
                     screen_state = GameScreen.VICTORY
                     break
                 if out == RoundOutcome.GAME_OVER_WATER:
@@ -334,14 +370,26 @@ def run() -> None:
                     ranking_back_rect,
                     save_data,
                 )
+            elif menu_panel == MenuPanel.SHOP:
+                draw_shop_overlay(
+                    logical_screen,
+                    menu_font_title,
+                    menu_font_btn,
+                    menu_font_hint,
+                    shop_box_rect,
+                    shop_item_rects,
+                    shop_back_rect,
+                    SKIN_CATALOG,
+                    save_data,
+                )
 
         elif screen_state == GameScreen.PLAY and session is not None:
             logical_screen.fill((28, 26, 32))
             draw_playfield(logical_screen, session.level)
-            draw_ball(logical_screen, session.ball_x, session.ball_y)
+            draw_ball(logical_screen, session.ball_x, session.ball_y, save_data.active_skin)
             draw_programmatic_hole_and_flag(logical_screen, session.level)
             draw_aim(logical_screen, session, (int(mouse_logical[0]), int(mouse_logical[1])))
-            draw_hud(logical_screen, font_ui, session)
+            draw_hud(logical_screen, font_ui, session, save_data.caju_coins)
 
         elif screen_state == GameScreen.VICTORY:
             logical_screen.fill((28, 42, 32))
@@ -350,7 +398,12 @@ def run() -> None:
             info = font_ui_big.render(f"Tacadas usadas: {strokes_used_victory}", True, (220, 235, 210))
             info_rect = info.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 8))
             logical_screen.blit(info, info_rect)
-            draw_stars(logical_screen, font_stars, stars_victory, SCREEN_WIDTH // 2, info_rect.bottom + 12)
+            coins_txt = font_ui_big.render(
+                f"+{coins_earned_victory} Caju Coins", True, (255, 214, 80)
+            )
+            coins_rect = coins_txt.get_rect(center=(SCREEN_WIDTH // 2, info_rect.bottom + 28))
+            logical_screen.blit(coins_txt, coins_rect)
+            draw_stars(logical_screen, font_stars, stars_victory, SCREEN_WIDTH // 2, coins_rect.bottom + 8)
 
             vic_cont, vic_menu_rect, vic_retry_rect = (
                 _victory_button_rects(session.level.id) if session is not None else (None, pygame.Rect(0, 0, 0, 0), pygame.Rect(0, 0, 0, 0))
@@ -382,9 +435,9 @@ def run() -> None:
         elif screen_state == GameScreen.PAUSED and session is not None:
             logical_screen.fill((28, 26, 32))
             draw_playfield(logical_screen, session.level)
-            draw_ball(logical_screen, session.ball_x, session.ball_y)
+            draw_ball(logical_screen, session.ball_x, session.ball_y, save_data.active_skin)
             draw_programmatic_hole_and_flag(logical_screen, session.level)
-            draw_hud(logical_screen, font_ui, session)
+            draw_hud(logical_screen, font_ui, session, save_data.caju_coins)
             draw_pause_overlay(
                 logical_screen,
                 font_title,

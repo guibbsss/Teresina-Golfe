@@ -9,6 +9,7 @@ from pathlib import Path
 import pygame
 
 from tour_teresina_golf.config import SCREEN_HEIGHT, SCREEN_WIDTH
+from tour_teresina_golf.draw_play import blit_ball_skin_preview
 from tour_teresina_golf.save_data import SaveData
 
 # Paleta alinhada ao mockup (verdes dos botões)
@@ -19,18 +20,21 @@ MENU_ICON_PLAY = (255, 220, 60)
 MENU_ICON_GEAR = (200, 210, 200)
 MENU_ICON_TROPHY = (230, 190, 80)
 MENU_ICON_DOOR = (120, 82, 55)
+MENU_ICON_COIN = (255, 214, 80)
 
 
 class MenuPanel(Enum):
     MAIN = auto()
     SETTINGS = auto()
     RANKING = auto()
+    SHOP = auto()
 
 
 class MenuIcon(Enum):
     PLAY = auto()
     GEAR = auto()
     TROPHY = auto()
+    COIN = auto()
     DOOR = auto()
 
 
@@ -132,7 +136,7 @@ def _render_fallback_menu_background() -> pygame.Surface:
 
 
 def _main_menu_stack_vertical_centers() -> tuple[float, int]:
-    """Centros Y da pilha dos 4 botões do menu (base comum com configurações)."""
+    """Centros Y da pilha dos 5 botões do menu (base comum com configurações)."""
     BTN_H = 42
     MARGIN_B = 22
     GAP = 8
@@ -142,14 +146,14 @@ def _main_menu_stack_vertical_centers() -> tuple[float, int]:
 
 
 def compute_main_menu_button_rects() -> list[pygame.Rect]:
-    """Quatro botões alinhados ao canto inferior direito: JOGAR … SAIR (de cima para baixo)."""
+    """Cinco botões alinhados ao canto inferior direito: JOGAR … SAIR (de cima para baixo)."""
     BTN_W, BTN_H = 282, 42
     MARGIN_R = 24
     y_bottom_center, step = _main_menu_stack_vertical_centers()
     cx = SCREEN_WIDTH - MARGIN_R - BTN_W // 2
     rects: list[pygame.Rect] = []
-    for idx in range(4):
-        j_from_bottom = 3 - idx
+    for idx in range(5):
+        j_from_bottom = 4 - idx
         cy = int(y_bottom_center - j_from_bottom * step)
         rects.append(pygame.Rect(cx - BTN_W // 2, cy - BTN_H // 2, BTN_W, BTN_H))
     return rects
@@ -161,7 +165,7 @@ def compute_settings_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
     cx = SCREEN_WIDTH // 2
     h_fs, h_back = 46, 46
     y_bottom_center, step = _main_menu_stack_vertical_centers()
-    # Mesmas linhas que os botões 3 e 4 da pilha principal (por baixo de CONFIGURACOES / por baixo de RANKING)
+    # Mesmas linhas que os dois botões inferiores da pilha principal (LOJA e SAIR)
     cy_back = int(y_bottom_center - 0 * step)
     cy_fs = int(y_bottom_center - 1 * step)
     opt_toggle_fs = _button_rect(cx, cy_fs, PANEL_W, h_fs)
@@ -176,6 +180,26 @@ def compute_ranking_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
     box = pygame.Rect(SCREEN_WIDTH // 2 - panel_w // 2, SCREEN_HEIGHT // 2 - 140, panel_w, panel_h)
     back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 18, 200, 44)
     return box, back
+
+
+def compute_shop_panel_rects(
+    catalog: list[tuple[str, str, int]],
+) -> tuple[pygame.Rect, list[pygame.Rect], pygame.Rect]:
+    """Caixa da loja ~700×300 centrada; um rect de ação (200×40) por skin paga; Voltar abaixo."""
+    box_w, box_h = 700, 300
+    box = pygame.Rect(SCREEN_WIDTH // 2 - box_w // 2, SCREEN_HEIGHT // 2 - box_h // 2, box_w, box_h)
+    paid = catalog[1:]
+    item_rects: list[pygame.Rect] = []
+    row_h = 58
+    row0_y = box.top + 78
+    btn_w, btn_h = 200, 40
+    margin_r = 20
+    for i in range(len(paid)):
+        cy = row0_y + i * row_h + row_h // 2
+        r = pygame.Rect(0, 0, btn_w, btn_h).move(box.right - margin_r - btn_w, cy - btn_h // 2)
+        item_rects.append(r)
+    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 20, 200, 44)
+    return box, item_rects, back
 
 
 def _draw_icon_play(surf: pygame.Surface, cx: int, cy: int, size: int = 12) -> None:
@@ -208,6 +232,12 @@ def _draw_icon_door(surf: pygame.Surface, cx: int, cy: int) -> None:
     pygame.draw.polygon(surf, (120, 200, 100), [(cx - 4, cy - 3), (cx - 4, cy + 3), (cx + 4, cy)])
 
 
+def _draw_icon_coin(surf: pygame.Surface, cx: int, cy: int) -> None:
+    pygame.draw.circle(surf, MENU_ICON_COIN, (cx, cy), 10)
+    pygame.draw.circle(surf, (200, 160, 40), (cx, cy), 10, width=2)
+    pygame.draw.arc(surf, (40, 30, 20), (cx - 6, cy - 6, 12, 12), 0.9, 2.6, 2)
+
+
 def _draw_menu_icon(surf: pygame.Surface, kind: MenuIcon, cx: int, cy: int) -> None:
     if kind == MenuIcon.PLAY:
         _draw_icon_play(surf, cx, cy)
@@ -215,6 +245,8 @@ def _draw_menu_icon(surf: pygame.Surface, kind: MenuIcon, cx: int, cy: int) -> N
         _draw_icon_gear(surf, cx, cy)
     elif kind == MenuIcon.TROPHY:
         _draw_icon_trophy(surf, cx, cy)
+    elif kind == MenuIcon.COIN:
+        _draw_icon_coin(surf, cx, cy)
     else:
         _draw_icon_door(surf, cx, cy)
 
@@ -367,6 +399,83 @@ def draw_ranking_overlay(
                 surf.blit(t_st, t_st.get_rect(midtop=(zone_cx, cy_s + outer + 8)))
 
         row_y += row_h
+
+    pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)
+    vb = font_ui.render("VOLTAR", True, MENU_BTN_TEXT)
+    surf.blit(vb, vb.get_rect(center=back_rect.center))
+
+
+def draw_shop_overlay(
+    surf: pygame.Surface,
+    font_title: pygame.font.Font,
+    font_ui: pygame.font.Font,
+    font_small: pygame.font.Font,
+    box_rect: pygame.Rect,
+    item_rects: list[pygame.Rect],
+    back_rect: pygame.Rect,
+    catalog: list[tuple[str, str, int]],
+    save_data: SaveData,
+) -> None:
+    veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    veil.fill((10, 14, 18, 145))
+    surf.blit(veil, (0, 0))
+
+    pygame.draw.rect(surf, (22, 38, 22), box_rect, border_radius=14)
+    pygame.draw.rect(surf, MENU_BTN_BORDER, box_rect, width=3, border_radius=14)
+
+    t = font_title.render("LOJA", True, MENU_BTN_TEXT)
+    surf.blit(t, t.get_rect(midtop=(box_rect.centerx, box_rect.top + 14)))
+
+    bal = font_ui.render(f"Caju Coins: {save_data.caju_coins}", True, (255, 214, 80))
+    surf.blit(bal, bal.get_rect(midtop=(box_rect.centerx, box_rect.top + 44)))
+
+    paid = catalog[1:]
+    preview = pygame.Rect(0, 0, 24, 24)
+    row_h = 58
+    row0_y = box_rect.top + 78
+    left_x = box_rect.left + 18
+    text_c = (220, 215, 200)
+    muted = (120, 115, 105)
+
+    for i, (skin_id, disp_name, cost) in enumerate(paid):
+        row_cy = row0_y + i * row_h + row_h // 2
+        preview.center = (left_x + 12, row_cy)
+        blit_ball_skin_preview(surf, preview, skin_id)
+
+        name_s = font_ui.render(disp_name, True, text_c)
+        surf.blit(name_s, (left_x + 32, row_cy - name_s.get_height() // 2))
+
+        btn = item_rects[i]
+        unlocked = skin_id in save_data.unlocked_skins
+        active = save_data.active_skin == skin_id
+        can_buy = save_data.caju_coins >= cost
+
+        if unlocked and active:
+            label = "Equipada"
+            fill = (55, 62, 55)
+            border = (100, 110, 95)
+            tc = muted
+        elif unlocked:
+            label = "Equipar"
+            fill = MENU_BTN_FILL
+            border = MENU_BTN_BORDER
+            tc = MENU_BTN_TEXT
+        elif can_buy:
+            label = f"Comprar ({cost})"
+            fill = MENU_BTN_FILL
+            border = MENU_BTN_BORDER
+            tc = MENU_BTN_TEXT
+        else:
+            label = f"Comprar ({cost})"
+            fill = (48, 48, 52)
+            border = (72, 72, 78)
+            tc = muted
+
+        pygame.draw.rect(surf, fill, btn, border_radius=8)
+        pygame.draw.rect(surf, border, btn, width=2, border_radius=8)
+        tb = font_small.render(label, True, tc)
+        surf.blit(tb, tb.get_rect(center=btn.center))
 
     pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
     pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)

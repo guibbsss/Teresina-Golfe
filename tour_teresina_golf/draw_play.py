@@ -110,12 +110,52 @@ def draw_programmatic_hole_and_flag(surface: pygame.Surface, level: Level) -> No
         surface.blit(flag, (int(hx - fw // 2), int(hy - fh)))
 
 
-def draw_ball(surface: pygame.Surface, x: float, y: float) -> None:
+def draw_ball(surface: pygame.Surface, x: float, y: float, skin: str = "default") -> None:
     shadow = pygame.Surface((BALL_RADIUS * 4, BALL_RADIUS * 4), pygame.SRCALPHA)
     pygame.draw.circle(shadow, (0, 0, 0, 70), (BALL_RADIUS * 2, BALL_RADIUS * 2), BALL_RADIUS + 2)
     surface.blit(shadow, (int(x - BALL_RADIUS * 2 + 2), int(y - BALL_RADIUS * 2 + 3)))
-    pygame.draw.circle(surface, COLOR_BALL, (int(x), int(y)), BALL_RADIUS)
-    pygame.draw.circle(surface, (210, 210, 210), (int(x - 2), int(y - 2)), max(2, BALL_RADIUS // 4))
+    sid = skin if skin in ("default", "capivara", "sol40", "brfc") else "default"
+    _draw_ball_skin_at(surface, int(x), int(y), BALL_RADIUS, sid)
+
+
+def _draw_ball_skin_at(surface: pygame.Surface, cx: int, cy: int, r: int, skin: str) -> None:
+    if skin == "default":
+        pygame.draw.circle(surface, COLOR_BALL, (cx, cy), r)
+        pygame.draw.circle(surface, (210, 210, 210), (cx - max(1, r // 3), cy - max(1, r // 3)), max(2, r // 4))
+        return
+    if skin == "capivara":
+        pygame.draw.circle(surface, (139, 95, 60), (cx, cy), r)
+        pygame.draw.circle(surface, (80, 50, 30), (cx + 2, cy - 1), 2)
+        pygame.draw.circle(surface, (80, 50, 30), (cx - 1, cy + 2), 2)
+        return
+    if skin == "sol40":
+        for k in range(8):
+            ang = k * math.pi / 4
+            x2 = int(cx + math.cos(ang) * 5)
+            y2 = int(cy + math.sin(ang) * 5)
+            pygame.draw.line(surface, (255, 140, 0), (cx, cy), (x2, y2), 2)
+        pygame.draw.circle(surface, (255, 210, 30), (cx, cy), r)
+        pygame.draw.circle(surface, (255, 230, 100), (cx - 1, cy - 1), max(1, r // 4))
+        return
+    if skin == "brfc":
+        pygame.draw.circle(surface, (20, 20, 20), (cx, cy), r)
+        clip_prev = surface.get_clip()
+        surface.set_clip(pygame.Rect(0, cy - r, cx, 2 * r))
+        pygame.draw.circle(surface, (200, 30, 30), (cx, cy), r)
+        surface.set_clip(pygame.Rect(cx, cy - r, max(1, surface.get_width() - cx), 2 * r))
+        pygame.draw.circle(surface, (20, 20, 20), (cx, cy), r)
+        surface.set_clip(clip_prev)
+        pygame.draw.line(surface, (245, 245, 245), (cx, cy - r), (cx, cy + r), 1)
+        pygame.draw.circle(surface, (245, 245, 245), (cx, cy), r, width=1)
+        return
+    pygame.draw.circle(surface, COLOR_BALL, (cx, cy), r)
+
+
+def blit_ball_skin_preview(dst: pygame.Surface, dest: pygame.Rect, skin: str) -> None:
+    surf = pygame.Surface((24, 24), pygame.SRCALPHA)
+    sid = skin if skin in ("default", "capivara", "sol40", "brfc") else "default"
+    _draw_ball_skin_at(surf, 12, 12, 5, sid)
+    dst.blit(surf, dest.topleft)
 
 
 def draw_aim(surface: pygame.Surface, session: RoundSession, mouse_pos: tuple[int, int]) -> None:
@@ -196,7 +236,7 @@ def draw_stars(surface: pygame.Surface, font: pygame.font.Font, stars: int, cent
         _draw_star_shape(surface, x0 + i * slot, cy, outer, filled=i < n, fill_color=gold, outline_color=dim)
 
 
-def draw_hud(surface: pygame.Surface, font: pygame.font.Font, session: RoundSession) -> None:
+def draw_hud(surface: pygame.Surface, font: pygame.font.Font, session: RoundSession, coins: int = 0) -> None:
     """Painel único no canto superior esquerdo (evita sobrepor tacadas com nome da fase)."""
     pad = 12
     inner = 10
@@ -205,26 +245,39 @@ def draw_hud(surface: pygame.Surface, font: pygame.font.Font, session: RoundSess
     line2 = f"Fase: {session.level.name}"
     t_left = font.render(line1, True, COLOR_UI_TEXT)
     t_phase = font.render(line2, True, COLOR_UI_ACCENT)
+    t_coins = font.render(f"Caju Coins: {coins}", True, (255, 214, 80))
     if session.strokes_left == 0 and not session.hole_victory_ready():
         preview_fill = 0
     else:
         preview_fill = calc_stars(session.strokes_left)
     t_rank_label = font.render("Ranking atual: ", True, COLOR_UI_ACCENT)
     outer = _star_outer_radius_px(font)
-    gap = max(4, outer // 3)
-    slot = 2 * outer + gap
-    stars_w = 3 * slot - gap
+    star_pitch = max(4, outer // 3)
+    slot = 2 * outer + star_pitch
+    stars_w = 3 * slot - star_pitch
     line3_w = t_rank_label.get_width() + stars_w
     line3_h = max(t_rank_label.get_height(), 2 * outer + 4)
-    bw = max(t_left.get_width(), t_phase.get_width(), line3_w) + inner * 2
-    bh = t_left.get_height() + gap + t_phase.get_height() + gap + line3_h + inner * 2
+    bw = max(t_left.get_width(), t_phase.get_width(), t_coins.get_width(), line3_w) + inner * 2
+    bh = (
+        t_left.get_height()
+        + gap
+        + t_phase.get_height()
+        + gap
+        + t_coins.get_height()
+        + gap
+        + line3_h
+        + inner * 2
+    )
     bg = pygame.Surface((bw, bh), pygame.SRCALPHA)
     bg.fill((16, 14, 22, 228))
     pygame.draw.rect(bg, (90, 82, 100), bg.get_rect(), width=1, border_radius=6)
     surface.blit(bg, (pad, pad))
     surface.blit(t_left, (pad + inner, pad + inner))
-    surface.blit(t_phase, (pad + inner, pad + inner + t_left.get_height() + gap))
-    y3 = pad + inner + t_left.get_height() + gap + t_phase.get_height() + gap
+    y2 = pad + inner + t_left.get_height() + gap
+    surface.blit(t_phase, (pad + inner, y2))
+    yc = y2 + t_phase.get_height() + gap
+    surface.blit(t_coins, (pad + inner, yc))
+    y3 = yc + t_coins.get_height() + gap
     label_y = y3 + (line3_h - t_rank_label.get_height()) // 2
     surface.blit(t_rank_label, (pad + inner, label_y))
     gold = (255, 214, 80)
