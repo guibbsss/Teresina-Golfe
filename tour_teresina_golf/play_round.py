@@ -9,7 +9,12 @@ from enum import Enum, auto
 import pygame
 
 from tour_teresina_golf import audio_stub
-from tour_teresina_golf.collision import ball_center_in_water, collide_ball_all_rects, collide_ball_bitmap
+from tour_teresina_golf.collision import (
+    ball_center_in_water,
+    circle_overlaps_collision_grid,
+    collide_ball_all_rects,
+    collide_ball_bitmap,
+)
 from tour_teresina_golf.config import (
     AIM_GRAB_RADIUS,
     BALL_RADIUS,
@@ -28,6 +33,7 @@ class RoundOutcome(Enum):
     VICTORY = auto()
     GAME_OVER_WATER = auto()
     GAME_OVER_STROKES = auto()
+    WATER_RESPAWN = auto()
 
 
 def _speed_sq(vx: float, vy: float) -> float:
@@ -73,6 +79,16 @@ class RoundSession:
         self.aiming = False
         self.strokes_left = self.level.strokes
 
+    def respawn_at_spawn_keep_strokes(self) -> None:
+        """Repor a bola no spawn sem reiniciar tacadas (ex.: água na fase 3)."""
+        x, y = self.level.ball_spawn
+        self.ball_x = float(x)
+        self.ball_y = float(y)
+        self.ball_vx = 0.0
+        self.ball_vy = 0.0
+        self.rolling = False
+        self.aiming = False
+
     def all_solids(self) -> list[pygame.Rect]:
         return list(self.level.walls) + list(self.level.obstacles)
 
@@ -111,6 +127,14 @@ class RoundSession:
             )
         self.ball_x, self.ball_y = bx, by
         self.ball_vx, self.ball_vy = bvx, bvy
+
+        wg = self.level.water_grid
+        if wg is not None and circle_overlaps_collision_grid(
+            wg, self.ball_x, self.ball_y, BALL_RADIUS, 16
+        ):
+            audio_stub.play_water_splash()
+            self.respawn_at_spawn_keep_strokes()
+            return RoundOutcome.WATER_RESPAWN
 
         if ball_center_in_water(self.ball_x, self.ball_y, self.level.water):
             audio_stub.play_water_splash()

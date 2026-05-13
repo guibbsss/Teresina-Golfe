@@ -30,6 +30,13 @@ def _solid_world(grid: CollisionGrid, x: float, y: float) -> bool:
     return grid.is_solid_px(xi, yi)
 
 
+def circle_overlaps_collision_grid(
+    grid: CollisionGrid, x: float, y: float, r: float, n_samples: int = 16
+) -> bool:
+    """True se o círculo (centro, raio) intersecta qualquer pixel marcado na grelha."""
+    return _circle_overlaps_bitmap(grid, x, y, r, n_samples)
+
+
 def _circle_overlaps_bitmap(grid: CollisionGrid, x: float, y: float, r: float, n_samples: int) -> bool:
     if _solid_world(grid, x, y):
         return True

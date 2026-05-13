@@ -24,7 +24,8 @@ from tour_teresina_golf.draw_play import (
     draw_programmatic_hole_and_flag,
 )
 from tour_teresina_golf.intro_screen import IntroState
-from tour_teresina_golf.level import make_fase1_level, make_level_by_id
+from tour_teresina_golf.config import START_LEVEL_ID
+from tour_teresina_golf.level import make_level_by_id
 
 _VICTORY_CONTINUE_TO: dict[str, str] = {"fase1": "fase2", "fase2": "fase3"}
 from tour_teresina_golf.main_menu_ui import (
@@ -181,7 +182,12 @@ def run() -> None:
                     if menu_panel == MenuPanel.MAIN:
                         if menu_btn_rects[0].collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
-                            session = RoundSession.new(make_fase1_level())
+                            start_id = (
+                                START_LEVEL_ID
+                                if START_LEVEL_ID in ("fase1", "fase2", "fase3")
+                                else "fase1"
+                            )
+                            session = RoundSession.new(make_level_by_id(start_id))
                             phys_accum = 0.0
                             screen_state = GameScreen.PLAY
                         elif menu_btn_rects[1].collidepoint(ev_mx, ev_my):
@@ -263,6 +269,8 @@ def run() -> None:
                 if out == RoundOutcome.GAME_OVER_WATER:
                     game_over_reason = "A bola caiu na água."
                     screen_state = GameScreen.GAME_OVER
+                    break
+                if out == RoundOutcome.WATER_RESPAWN:
                     break
                 if out == RoundOutcome.GAME_OVER_STROKES:
                     game_over_reason = "Acabaram as tacadas."
