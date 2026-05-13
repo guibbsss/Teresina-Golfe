@@ -26,7 +26,6 @@ from tour_teresina_golf.draw_play import (
     draw_pause_overlay,
     draw_playfield,
     draw_programmatic_hole_and_flag,
-    draw_stars,
 )
 from tour_teresina_golf.intro_screen import IntroState
 from tour_teresina_golf.level import make_level_by_id
@@ -141,7 +140,92 @@ def _load_game_over_assets() -> tuple[pygame.Surface, pygame.Surface, pygame.Sur
             retry_rect.y += dy
 
     return bg, menu_s, retry_s, menu_rect, retry_rect
+
+
 _VICTORY_CONTINUE_TO: dict[str, str] = {"fase1": "fase2", "fase2": "fase3"}
+
+
+def _layout_bottom_row_symmetric(
+    natives: list[pygame.Surface],
+) -> tuple[list[pygame.Surface], list[pygame.Rect]]:
+    """Linha de botões em baixo com margens esquerda/direita iguais (mesma ideia que a derrota)."""
+    lx = LOGICAL_W / float(_DEFEAT_LAYOUT_W)
+    ly = LOGICAL_H / float(_DEFEAT_LAYOUT_H)
+    gap = _DEFEAT_BTN_GAP
+    margin = 8
+
+    max_h = max(s.get_height() for s in natives)
+    bh0 = max(1, int(round(max_h * ly)))
+
+    scaled: list[pygame.Surface] = []
+    for surf in natives:
+        w, h = surf.get_size()
+        bw = max(1, int(round(w * bh0 / float(h))))
+        scaled.append(pygame.transform.smoothscale(surf, (bw, bh0)))
+
+    widths = [s.get_width() for s in scaled]
+    n = len(widths)
+    total_w = sum(widths) + (n - 1) * gap
+    avail = LOGICAL_W - 2 * margin
+
+    if total_w > avail:
+        f = avail / float(total_w)
+        bh = max(1, int(round(bh0 * f)))
+        scaled.clear()
+        for surf in natives:
+            w, h = surf.get_size()
+            bw = max(1, int(round(w * bh / float(h))))
+            scaled.append(pygame.transform.smoothscale(surf, (bw, bh)))
+        widths = [s.get_width() for s in scaled]
+        total_w = sum(widths) + (n - 1) * gap
+
+    start_x = margin + max(0, (avail - total_w) // 2)
+    y_bottom = LOGICAL_H - margin
+    rects: list[pygame.Rect] = []
+    x = start_x
+    for s in scaled:
+        rects.append(pygame.Rect(x, y_bottom - s.get_height(), s.get_width(), s.get_height()))
+        x += s.get_width() + gap
+    return scaled, rects
+
+
+def _load_victory_assets_pack() -> tuple[
+    pygame.Surface,
+    pygame.Surface,
+    pygame.Surface,
+    pygame.Surface,
+    pygame.Rect,
+    pygame.Rect,
+    pygame.Rect,
+    pygame.Surface,
+    pygame.Surface,
+    pygame.Rect,
+    pygame.Rect,
+]:
+    """Fundo de vitória + botões: fila de 3 (Próxima, Menu, Reiniciar) ou fila de 2 (Menu, Reiniciar)."""
+    bg_native = pygame.image.load(str(_REPO_ROOT / "telas" / "Tela de vitória.png")).convert()
+    bg = pygame.transform.smoothscale(bg_native, (LOGICAL_W, LOGICAL_H))
+
+    next_n = pygame.image.load(str(_REPO_ROOT / "botoes" / "Proxima_Fase-removebg-preview.png")).convert_alpha()
+    menu_n = pygame.image.load(str(_REPO_ROOT / "botoes" / "Voltar_ao_Menu-removebg-preview.png")).convert_alpha()
+    retry_n = pygame.image.load(str(_REPO_ROOT / "botoes" / "Reiniciar_Fase-removebg-preview.png")).convert_alpha()
+
+    s3, r3 = _layout_bottom_row_symmetric([next_n, menu_n, retry_n])
+    s2, r2 = _layout_bottom_row_symmetric([menu_n, retry_n])
+
+    return (
+        bg,
+        s3[0],
+        s3[1],
+        s3[2],
+        r3[0],
+        r3[1],
+        r3[2],
+        s2[0],
+        s2[1],
+        r2[0],
+        r2[1],
+    )
 
 
 class GameScreen(Enum):
@@ -166,23 +250,6 @@ def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
     return pygame.Rect(0, 0, w, h).move(center_x - w // 2, center_y - h // 2)
 
 
-def _victory_button_rects(level_id: str) -> tuple[pygame.Rect | None, pygame.Rect, pygame.Rect]:
-    """Continuar (fase1→2, fase2→3), Menu, Jogar novamente."""
-    cx = SCREEN_WIDTH // 2
-    cy = SCREEN_HEIGHT // 2 + 20
-    if level_id in _VICTORY_CONTINUE_TO:
-        return (
-            _button_rect(cx, cy + 24, 280, 44),
-            _button_rect(cx, cy + 84, 260, 44),
-            _button_rect(cx, cy + 144, 260, 44),
-        )
-    return (
-        None,
-        _button_rect(cx, cy + 56, 260, 48),
-        _button_rect(cx, cy + 116, 260, 48),
-    )
-
-
 def run() -> None:
     pygame.init()
     pygame.display.set_caption(TITLE)
@@ -196,7 +263,6 @@ def run() -> None:
     clock = pygame.time.Clock()
 
     font_title, font_sub, font_ui, font_ui_big = _make_fonts()
-    font_stars = pygame.font.SysFont("consolas", 36)
 
     menu_bg, _ = load_menu_background_surface()
     menu_font_title, menu_font_btn, menu_font_hint = load_menu_pixel_fonts()
@@ -220,6 +286,19 @@ def run() -> None:
     coins_earned_victory = 0
 
     defeat_bg, defeat_btn_menu, defeat_btn_retry, go_menu_rect, go_retry_rect = _load_game_over_assets()
+    (
+        victory_bg,
+        vic3_next_s,
+        vic3_menu_s,
+        vic3_retry_s,
+        vic_r_next3,
+        vic_r_menu3,
+        vic_r_retry3,
+        vic2_menu_s,
+        vic2_retry_s,
+        vic_r_menu2,
+        vic_r_retry2,
+    ) = _load_victory_assets_pack()
 
     pause_continuar_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 24, 280, 48)
     pause_menu_rect = _button_rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 84, 260, 44)
@@ -352,23 +431,34 @@ def run() -> None:
 
             elif screen_state == GameScreen.VICTORY:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and session is not None:
-                    vic_cont, vic_menu_rect, vic_retry_rect = _victory_button_rects(session.level.id)
-                    if vic_cont is not None and vic_cont.collidepoint(ev_mx, ev_my):
-                        audio_stub.play_ui_confirm()
-                        nxt = _VICTORY_CONTINUE_TO.get(session.level.id)
-                        if nxt:
-                            session = RoundSession.new(make_level_by_id(nxt))
+                    lid = session.level.id
+                    if lid in _VICTORY_CONTINUE_TO:
+                        if vic_r_next3.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            nxt = _VICTORY_CONTINUE_TO.get(lid)
+                            if nxt:
+                                session = RoundSession.new(make_level_by_id(nxt))
+                                phys_accum = 0.0
+                                screen_state = GameScreen.PLAY
+                        elif vic_r_menu3.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.MAIN
+                            screen_state = GameScreen.MENU
+                        elif vic_r_retry3.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            session = RoundSession.new(make_level_by_id(lid))
                             phys_accum = 0.0
                             screen_state = GameScreen.PLAY
-                    elif vic_menu_rect.collidepoint(ev_mx, ev_my):
-                        audio_stub.play_ui_confirm()
-                        menu_panel = MenuPanel.MAIN
-                        screen_state = GameScreen.MENU
-                    elif vic_retry_rect.collidepoint(ev_mx, ev_my):
-                        audio_stub.play_ui_confirm()
-                        session = RoundSession.new(make_level_by_id(session.level.id))
-                        phys_accum = 0.0
-                        screen_state = GameScreen.PLAY
+                    else:
+                        if vic_r_menu2.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            menu_panel = MenuPanel.MAIN
+                            screen_state = GameScreen.MENU
+                        elif vic_r_retry2.collidepoint(ev_mx, ev_my):
+                            audio_stub.play_ui_confirm()
+                            session = RoundSession.new(make_level_by_id(lid))
+                            phys_accum = 0.0
+                            screen_state = GameScreen.PLAY
 
             elif screen_state == GameScreen.GAME_OVER:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and session is not None:
@@ -476,32 +566,14 @@ def run() -> None:
             draw_hud(logical_screen, font_ui, session, save_data.caju_coins)
 
         elif screen_state == GameScreen.VICTORY:
-            logical_screen.fill((28, 42, 32))
-            t = font_title.render("Buraco!", True, (200, 255, 190))
-            logical_screen.blit(t, t.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 48)))
-            info = font_ui_big.render(f"Tacadas usadas: {strokes_used_victory}", True, (220, 235, 210))
-            info_rect = info.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 8))
-            logical_screen.blit(info, info_rect)
-            coins_txt = font_ui_big.render(
-                f"+{coins_earned_victory} Caju Coins", True, (255, 214, 80)
-            )
-            coins_rect = coins_txt.get_rect(center=(SCREEN_WIDTH // 2, info_rect.bottom + 28))
-            logical_screen.blit(coins_txt, coins_rect)
-            draw_stars(logical_screen, font_stars, stars_victory, SCREEN_WIDTH // 2, coins_rect.bottom + 8)
-
-            vic_cont, vic_menu_rect, vic_retry_rect = (
-                _victory_button_rects(session.level.id) if session is not None else (None, pygame.Rect(0, 0, 0, 0), pygame.Rect(0, 0, 0, 0))
-            )
-            labels: list[tuple[pygame.Rect, str]]
-            if vic_cont is not None:
-                labels = [(vic_cont, "Continuar"), (vic_menu_rect, "Menu"), (vic_retry_rect, "Jogar novamente")]
-            else:
-                labels = [(vic_menu_rect, "Menu"), (vic_retry_rect, "Jogar novamente")]
-            for rect, label in labels:
-                pygame.draw.rect(logical_screen, (52, 72, 52), rect, border_radius=8)
-                pygame.draw.rect(logical_screen, (120, 160, 110), rect, width=2, border_radius=8)
-                tx = font_ui.render(label, True, (240, 250, 235))
-                logical_screen.blit(tx, tx.get_rect(center=rect.center))
+            logical_screen.blit(victory_bg, (0, 0))
+            if session is not None and session.level.id in _VICTORY_CONTINUE_TO:
+                logical_screen.blit(vic3_next_s, vic_r_next3.topleft)
+                logical_screen.blit(vic3_menu_s, vic_r_menu3.topleft)
+                logical_screen.blit(vic3_retry_s, vic_r_retry3.topleft)
+            elif session is not None:
+                logical_screen.blit(vic2_menu_s, vic_r_menu2.topleft)
+                logical_screen.blit(vic2_retry_s, vic_r_retry2.topleft)
 
         elif screen_state == GameScreen.GAME_OVER:
             logical_screen.blit(defeat_bg, (0, 0))
