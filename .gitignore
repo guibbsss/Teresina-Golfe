@@ -1,15 +1,8 @@
-# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Ambiente virtual
 venv/
-
-# Claude Code (config local da maquina)
 .claude/
-
-# Dados de runtime (gerados pelo jogo)
 save_data.json
 user_settings.json
