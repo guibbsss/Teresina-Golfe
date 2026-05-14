@@ -1,49 +1,85 @@
 # Tour Teresina Golf
 
-Mini golfe 2D top-down em Python/Pygame: tacada estilo estilingue (arrastar na direção oposta ao tiro), física simples com atrito, buraco, zonas de água e limite de tacadas — conforme o GDD do projeto académico.
+Mini golfe 2D top-down em Python/Pygame: tacada estilo estilingue, física com
+atrito, buraco, zonas de água e sistema de estrelas — ambientado nos pontos
+turísticos de Teresina (PI).
 
-O jogo renderiza internamente em **960×540** (espaço lógico) e **escala** para o tamanho da janela ou ecrã completo.
+## Download
 
-## Requisitos
+> **[Baixar TourTeresinaGolf.exe](https://github.com/guiri/Teresina-Golfe/releases/latest/download/TourTeresinaGolf.exe)**
 
-- Python 3.10 ou superior (recomendado)
-- Windows (alvo principal do GDD)
+Substitui o segmento `guiri/Teresina-Golfe` na URL pelo teu utilizador e repositório reais no GitHub antes de publicar o release.
 
-## Instalação
+Apenas Windows 64-bit. Não requer instalação — executa o `.exe` diretamente.
+O progresso (`save_data.json`) fica salvo na mesma pasta do executável.
+
+---
+
+## Executar pelo código-fonte
+
+**Requisitos:** Python 3.10+ e pip.
 
 ```bash
 pip install -r requirements.txt
-```
-
-## Executar
-
-```bash
 python main.py
 ```
 
-## Controlos
+Para saltar para uma fase específica:
 
-- **Jogo:** apenas rato — clicar perto da bola, arrastar e soltar para tacar.
-- **Menu / vitória / game over:** botões com o rato; na intro, **Enter**, **Espaço** ou clique para continuar.
-- **Durante o jogo:** **Esc** volta ao menu.
-- **Vídeo:** no menu principal, **Opções de vídeo** — alternar ecrã inteiro; em modo **janela**, ver o tamanho em pixels (960×540 × escala) e usar **−** / **+** para mudar a escala (1×…6×).
-- Atalhos: **F11** ou **Alt+Enter** (fullscreen); **[** / **]** ou **-** / **=** (escala só em janela).
-- Preferências ficam em **`user_settings.json`** (`fullscreen`, `window_scale`, `settings_version`). Se o jogo abrir em modo estranho após testes antigos, apaga este ficheiro para voltar aos padrões (janela, escala 2×).
+```bash
+python main.py fase2
+python main.py fase3
+```
 
-## Empacotar (.exe)
+---
 
-Instale o PyInstaller no ambiente virtual e gere o executável (ajuste caminhos se necessário):
+## Gerar o executável (.exe)
 
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --onefile --name TourTeresinaGolf main.py
+python -m PyInstaller --noconfirm TourTeresinaGolf.spec
 ```
 
-O binário aparece em `dist/`. Inclua eventualmente ícone com `--icon=caminho.ico`.
+Ou usa o script:
 
-## Estrutura
+```text
+build.bat
+```
 
-- `main.py` — entrada
-- `tour_teresina_golf/` — pacote (`app`, física, colisão, vídeo, `settings`, nível de teste, ecrãs)
-- `user_settings.json` — criado automaticamente (preferências de janela)
-- `PENDENCIAS.md` — itens ainda por implementar face ao GDD completo
+### Onde fica a build
+
+Após o PyInstaller terminar, o **executável do jogo** fica na pasta **`dist/`**, na **raiz do repositório** (ao lado de `main.py` e do ficheiro `.spec`):
+
+- **Windows:** `dist\TourTeresinaGolf.exe`
+
+A pasta **`build/`** (também na raiz) contém apenas ficheiros temporários do PyInstaller; o que se distribui ou se executa fora do Python é o conteúdo de **`dist/`**.
+
+---
+
+## Controlos
+
+| Ação | Controle |
+|------|----------|
+| Tacar | Clicar perto da bola, arrastar, soltar |
+| Pausar | ESC durante o jogo |
+| Tela cheia | F11 ou Alt+Enter |
+| Escala da janela | `[` diminui / `]` aumenta (modo janela) |
+
+---
+
+## Fases
+
+| Fase | Nome | Tacadas |
+|------|------|---------|
+| 1 | Avenida Frei Serafim | 10 |
+| 2 | Ponte Estaiada | 12 |
+| 3 | Encontro dos Rios | 15 |
+
+---
+
+## Equipe
+
+- Gabriel Lages Oliveira de Azevedo — Programação e Física
+- Guilherme Ruben Pereira Matos — Assets e Level Design
+
+Turma Zeta, 7º Período — UESPI

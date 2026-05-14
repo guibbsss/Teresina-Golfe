@@ -1,6 +1,5 @@
 from __future__ import annotations
 from enum import Enum, auto
-from pathlib import Path
 import pygame
 from tour_teresina_golf import audio_stub
 from tour_teresina_golf.config import FIXED_DT, LOGICAL_H, LOGICAL_W, PHYS_ACCUM_LIMIT, SCREEN_HEIGHT, SCREEN_WIDTH, SKIN_CATALOG, START_LEVEL_ID, TITLE
@@ -9,10 +8,10 @@ from tour_teresina_golf.intro_screen import IntroState
 from tour_teresina_golf.level import make_level_by_id
 from tour_teresina_golf.main_menu_ui import MENU_SHOP_BUTTON_ENABLED, MenuPanel, compute_credits_panel_rects, compute_main_menu_button_rects, compute_menu_credits_chip_rect, compute_ranking_panel_rects, compute_settings_panel_rects, compute_shop_panel_rects, draw_credits_overlay, draw_main_menu_buttons, draw_menu_background, draw_menu_credits_chip, draw_ranking_overlay, draw_settings_overlay, draw_shop_overlay, load_menu_background_surface, load_menu_pixel_fonts, main_menu_labels_and_icons
 from tour_teresina_golf.play_round import RoundOutcome, RoundSession, calc_stars
+from tour_teresina_golf.resource_path import asset
 from tour_teresina_golf.save_data import award_coins, load_save_data, purchase_skin, save_save_data, set_active_skin, update_best_score
 from tour_teresina_golf.settings import load_settings, save_settings
 from tour_teresina_golf.video import DisplayPresenter
-_REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFEAT_LAYOUT_W = 1920
 _DEFEAT_LAYOUT_H = 1080
 _DEFEAT_BTN_MENU_LAYOUT = (400, 881)
@@ -20,13 +19,13 @@ _DEFEAT_BTN_RETRY_LAYOUT = (1250, 850)
 _DEFEAT_BTN_GAP = 16
 
 def _load_game_over_assets() -> tuple[pygame.Surface, pygame.Surface, pygame.Surface, pygame.Rect, pygame.Rect]:
-    bg_native = pygame.image.load(str(_REPO_ROOT / 'telas' / 'Tela de Derrota.png')).convert()
+    bg_native = pygame.image.load(str(asset('telas/Tela de Derrota.png'))).convert()
     nw, nh = bg_native.get_size()
     bg = pygame.transform.smoothscale(bg_native, (LOGICAL_W, LOGICAL_H))
     lx = LOGICAL_W / float(_DEFEAT_LAYOUT_W)
     ly = LOGICAL_H / float(_DEFEAT_LAYOUT_H)
-    menu_native = pygame.image.load(str(_REPO_ROOT / 'botoes' / 'Voltar_ao_Menu-removebg-preview.png')).convert_alpha()
-    retry_native = pygame.image.load(str(_REPO_ROOT / 'botoes' / 'Reiniciar_Fase-removebg-preview.png')).convert_alpha()
+    menu_native = pygame.image.load(str(asset('botoes/Voltar_ao_Menu-removebg-preview.png'))).convert_alpha()
+    retry_native = pygame.image.load(str(asset('botoes/Reiniciar_Fase-removebg-preview.png'))).convert_alpha()
     mw, mh = menu_native.get_size()
     bw0 = max(1, int(round(mw * lx)))
     bh0 = max(1, int(round(mh * ly)))
@@ -112,11 +111,11 @@ def _layout_bottom_row_symmetric(natives: list[pygame.Surface]) -> tuple[list[py
     return (scaled, rects)
 
 def _load_victory_assets_pack() -> tuple[pygame.Surface, pygame.Surface, pygame.Surface, pygame.Surface, pygame.Rect, pygame.Rect, pygame.Rect, pygame.Surface, pygame.Surface, pygame.Rect, pygame.Rect]:
-    bg_native = pygame.image.load(str(_REPO_ROOT / 'telas' / 'Tela de vitória.png')).convert()
+    bg_native = pygame.image.load(str(asset('telas/Tela de vitória.png'))).convert()
     bg = pygame.transform.smoothscale(bg_native, (LOGICAL_W, LOGICAL_H))
-    next_n = pygame.image.load(str(_REPO_ROOT / 'botoes' / 'Proxima_Fase-removebg-preview.png')).convert_alpha()
-    menu_n = pygame.image.load(str(_REPO_ROOT / 'botoes' / 'Voltar_ao_Menu-removebg-preview.png')).convert_alpha()
-    retry_n = pygame.image.load(str(_REPO_ROOT / 'botoes' / 'Reiniciar_Fase-removebg-preview.png')).convert_alpha()
+    next_n = pygame.image.load(str(asset('botoes/Proxima_Fase-removebg-preview.png'))).convert_alpha()
+    menu_n = pygame.image.load(str(asset('botoes/Voltar_ao_Menu-removebg-preview.png'))).convert_alpha()
+    retry_n = pygame.image.load(str(asset('botoes/Reiniciar_Fase-removebg-preview.png'))).convert_alpha()
     s3, r3 = _layout_bottom_row_symmetric([next_n, menu_n, retry_n])
     s2, r2 = _layout_bottom_row_symmetric([menu_n, retry_n])
     return (bg, s3[0], s3[1], s3[2], r3[0], r3[1], r3[2], s2[0], s2[1], r2[0], r2[1])
@@ -149,7 +148,10 @@ def run() -> None:
     pygame.display.set_caption(TITLE)
     settings = load_settings()
     presenter = DisplayPresenter()
+    _ws_before = settings.window_scale
     physical_screen = presenter.apply_video_mode(settings)
+    if not settings.fullscreen and settings.window_scale != _ws_before:
+        save_settings(settings)
     logical_screen = pygame.Surface((LOGICAL_W, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
     font_title, font_sub, font_ui, font_ui_big = _make_fonts()

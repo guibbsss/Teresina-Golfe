@@ -1,33 +1,16 @@
 from __future__ import annotations
-import importlib.util
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 import pygame
 from tour_teresina_golf.collision import CollisionGrid
 from tour_teresina_golf.config import LOGICAL_H, LOGICAL_W
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+from tour_teresina_golf.resource_path import asset
 
-def _load_fase_module(rel_py: Path, mod_name: str):
-    path = _REPO_ROOT / 'fases' / rel_py
-    spec = importlib.util.spec_from_file_location(mod_name, path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f'Não foi possível carregar {path}')
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-def _load_fase1_colisoes_module():
-    return _load_fase_module(Path('fase1') / 'fase1_colisoes.py', 'fase1_colisoes')
-
-def _load_fase2_colisoes_module():
-    return _load_fase_module(Path('fase2') / 'fase2_colisoes.py', 'fase2_colisoes')
-
-def _load_fase3_colisoes_module():
-    return _load_fase_module(Path('fase3') / 'fase3_colisoes.py', 'fase3_colisoes')
 
 def _scale_xy(xy: tuple[float, float], sx: float, sy: float) -> tuple[float, float]:
     return (float(xy[0] * sx), float(xy[1] * sy))
+
 
 @dataclass
 class Level:
@@ -204,14 +187,14 @@ def _fase3_looks_like_color_overlay(surf: pygame.Surface) -> bool:
     return n_y > 500
 
 def make_fase1_level() -> Level:
-    m = _load_fase1_colisoes_module()
+    from fases.fase1 import fase1_colisoes as m
     lw, lh = (float(m.LARGURA_FASE1), float(m.ALTURA_FASE1))
     sx = LOGICAL_W / lw
     sy = LOGICAL_H / lh
     spawn = _scale_xy(m.SPAWN_FASE1, sx, sy)
     hole = _scale_xy(m.BURACO_FASE1, sx, sy)
     hole_cap = float(m.BURACO_RAIO_NATIVO) * min(sx, sy)
-    img_path = _REPO_ROOT / 'fases' / 'fase1' / 'fase1.png'
+    img_path = asset('fases/fase1/fase1.png')
     if not img_path.is_file():
         raise FileNotFoundError(f'Arte da fase em falta: {img_path}')
     bg = pygame.image.load(str(img_path))
@@ -225,21 +208,21 @@ def make_fase1_level() -> Level:
         return pygame.Rect(int(x * sx), int(y * sy), max(1, int(w * sx)), max(1, int(h * sy)))
     walls = [_sr(r) for r in m.PAREDES_FASE1]
     obstacles = [_sr(r) for r in m.OBSTACULOS_FASE1]
-    return Level(id='fase1', name='Avenida Frei Serafim', strokes=10, ball_spawn=spawn, hole_center=hole, walls=walls, obstacles=obstacles, water=[], play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H), background=bg, hide_solids_overlay=True, hole_capture_radius=hole_cap, draw_programmatic_hole=True, flag_sprite_path=_REPO_ROOT / 'acessorios' / 'bandeira.png', collision_grid=None)
+    return Level(id='fase1', name='Avenida Frei Serafim', strokes=10, ball_spawn=spawn, hole_center=hole, walls=walls, obstacles=obstacles, water=[], play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H), background=bg, hide_solids_overlay=True, hole_capture_radius=hole_cap, draw_programmatic_hole=True, flag_sprite_path=asset('acessorios/bandeira.png'), collision_grid=None)
 
 def make_fase2_level() -> Level:
-    m = _load_fase2_colisoes_module()
+    from fases.fase2 import fase2_colisoes as m
     lw, lh = (float(m.LARGURA_FASE2), float(m.ALTURA_FASE2))
     sx = LOGICAL_W / lw
     sy = LOGICAL_H / lh
     spawn = _scale_xy(m.SPAWN_FASE2, sx, sy)
     hole = _scale_xy(m.BURACO_FASE2, sx, sy)
     hole_cap = float(m.BURACO_RAIO_NATIVO) * min(sx, sy)
-    img_path = _REPO_ROOT / 'fases' / 'fase2' / 'fase2.png'
+    img_path = asset('fases/fase2/fase2.png')
     if not img_path.is_file():
         raise FileNotFoundError(f'Arte da fase em falta: {img_path}')
     art_full = pygame.image.load(str(img_path))
-    collision_bw_path = _REPO_ROOT / 'fases' / 'fase2' / 'fase2_mapa_colisao.png'
+    collision_bw_path = asset('fases/fase2/fase2_mapa_colisao.png')
     if collision_bw_path.is_file():
         col_full = pygame.image.load(str(collision_bw_path))
         if col_full.get_size() != art_full.get_size():
@@ -255,21 +238,21 @@ def make_fase2_level() -> Level:
         bg = pygame.transform.smoothscale(bg, (LOGICAL_W, LOGICAL_H))
     if pygame.display.get_surface() is not None:
         bg = bg.convert()
-    return Level(id='fase2', name='Ponte Estaiada', strokes=12, ball_spawn=spawn, hole_center=hole, walls=[], obstacles=[], water=[], play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H), background=bg, hide_solids_overlay=True, hole_capture_radius=hole_cap, draw_programmatic_hole=True, flag_sprite_path=_REPO_ROOT / 'acessorios' / 'bandeira.png', collision_grid=collision_grid, collision_debug_overlay=dbg_overlay)
+    return Level(id='fase2', name='Ponte Estaiada', strokes=12, ball_spawn=spawn, hole_center=hole, walls=[], obstacles=[], water=[], play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H), background=bg, hide_solids_overlay=True, hole_capture_radius=hole_cap, draw_programmatic_hole=True, flag_sprite_path=asset('acessorios/bandeira.png'), collision_grid=collision_grid, collision_debug_overlay=dbg_overlay)
 
 def make_fase3_level() -> Level:
-    m = _load_fase3_colisoes_module()
+    from fases.fase3 import fase3_colisoes as m
     lw, lh = (float(m.LARGURA_FASE3), float(m.ALTURA_FASE3))
     sx = LOGICAL_W / lw
     sy = LOGICAL_H / lh
     spawn = _scale_xy(m.SPAWN_FASE3, sx, sy)
     hole = _scale_xy(m.BURACO_FASE3, sx, sy)
     hole_cap = float(m.BURACO_RAIO_NATIVO) * min(sx, sy)
-    img_path = _REPO_ROOT / 'fases' / 'fase3' / 'fase3.png'
+    img_path = asset('fases/fase3/fase3.png')
     if not img_path.is_file():
         raise FileNotFoundError(f'Arte da fase em falta: {img_path}')
     art_full = pygame.image.load(str(img_path))
-    collision_bw_path = _REPO_ROOT / 'fases' / 'fase3' / 'fase3_mapa_colisao.png'
+    collision_bw_path = asset('fases/fase3/fase3_mapa_colisao.png')
     water_grid: CollisionGrid | None = None
     if collision_bw_path.is_file():
         col_full = pygame.image.load(str(collision_bw_path))
@@ -305,7 +288,7 @@ def make_fase3_level() -> Level:
         bg = pygame.transform.smoothscale(bg, (LOGICAL_W, LOGICAL_H))
     if pygame.display.get_surface() is not None:
         bg = bg.convert()
-    return Level(id='fase3', name='Encontro dos Rios', strokes=15, ball_spawn=spawn, hole_center=hole, walls=[], obstacles=[], water=[], play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H), background=bg, hide_solids_overlay=True, hole_capture_radius=hole_cap, draw_programmatic_hole=True, flag_sprite_path=_REPO_ROOT / 'acessorios' / 'bandeira.png', collision_grid=collision_grid, water_grid=water_grid, collision_debug_overlay=dbg_overlay)
+    return Level(id='fase3', name='Encontro dos Rios', strokes=15, ball_spawn=spawn, hole_center=hole, walls=[], obstacles=[], water=[], play_rect=pygame.Rect(0, 0, LOGICAL_W, LOGICAL_H), background=bg, hide_solids_overlay=True, hole_capture_radius=hole_cap, draw_programmatic_hole=True, flag_sprite_path=asset('acessorios/bandeira.png'), collision_grid=collision_grid, water_grid=water_grid, collision_debug_overlay=dbg_overlay)
 
 def make_level_by_id(level_id: str) -> Level:
     if level_id == 'fase3':

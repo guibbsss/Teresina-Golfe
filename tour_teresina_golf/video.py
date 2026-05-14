@@ -3,6 +3,35 @@ import pygame
 from tour_teresina_golf.config import LOGICAL_H, LOGICAL_W
 from tour_teresina_golf.settings import UserSettings
 
+_CHROME_MARGIN_X = 48
+_CHROME_MARGIN_Y = 96
+
+
+def _max_safe_window_scale() -> int:
+    """Maior escala inteira em que LOGICAL_W/H * escala cabe na área útil do monitor principal."""
+    dw = dh = 0
+    try:
+        sizes = pygame.display.get_desktop_sizes()
+        if sizes:
+            dw, dh = int(sizes[0][0]), int(sizes[0][1])
+    except (AttributeError, TypeError, ValueError, pygame.error):
+        pass
+    if dw < LOGICAL_W or dh < LOGICAL_H:
+        try:
+            info = pygame.display.Info()
+            dw = max(dw, int(info.current_w))
+            dh = max(dh, int(info.current_h))
+        except (AttributeError, TypeError, ValueError, pygame.error):
+            pass
+    if dw < LOGICAL_W or dh < LOGICAL_H:
+        return 6
+    avail_w = max(LOGICAL_W, dw - _CHROME_MARGIN_X)
+    avail_h = max(LOGICAL_H, dh - _CHROME_MARGIN_Y)
+    max_sw = avail_w // LOGICAL_W
+    max_sh = avail_h // LOGICAL_H
+    return max(1, min(6, min(max_sw, max_sh)))
+
+
 class DisplayPresenter:
 
     def __init__(self) -> None:
@@ -29,7 +58,9 @@ class DisplayPresenter:
             self._letter_offset_x = (dw - sw) // 2
             self._letter_offset_y = (dh - sh) // 2
         else:
-            self._present_scale = float(self._window_scale)
+            sx = dw / float(LOGICAL_W)
+            sy = dh / float(LOGICAL_H)
+            self._present_scale = min(sx, sy)
             self._letter_offset_x = 0
             self._letter_offset_y = 0
 
@@ -38,6 +69,11 @@ class DisplayPresenter:
         if s.fullscreen:
             screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
+            max_s = _max_safe_window_scale()
+            if self._window_scale > max_s:
+                self._window_scale = max_s
+                s.window_scale = max_s
+                s.clamp()
             w = LOGICAL_W * self._window_scale
             h = LOGICAL_H * self._window_scale
             screen = pygame.display.set_mode((w, h))

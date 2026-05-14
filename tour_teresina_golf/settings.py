@@ -14,8 +14,8 @@ class UserSettings:
         self.window_scale = max(1, min(6, int(self.window_scale)))
 
 def settings_path() -> Path:
-    root = Path(__file__).resolve().parent.parent
-    return root / 'user_settings.json'
+    from tour_teresina_golf.resource_path import data_dir
+    return data_dir() / 'user_settings.json'
 
 def load_settings() -> UserSettings:
     path = settings_path()

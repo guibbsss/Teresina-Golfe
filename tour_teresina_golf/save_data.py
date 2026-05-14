@@ -24,7 +24,8 @@ class SaveData:
         return getattr(self, level_id, None)
 
 def _save_path() -> Path:
-    return Path(__file__).resolve().parent.parent / 'save_data.json'
+    from tour_teresina_golf.resource_path import data_dir
+    return data_dir() / 'save_data.json'
 
 def load_save_data() -> SaveData:
     path = _save_path()

@@ -5,7 +5,7 @@ import pygame
 from tour_teresina_golf.config import BALL_RADIUS, COLOR_ASPHALT, COLOR_BALL, COLOR_FAIRWAY, COLOR_FAIRWAY_ALT, COLOR_HOLE, COLOR_HOLE_RING, COLOR_UI_ACCENT, COLOR_UI_TEXT, COLOR_WALL, COLOR_WATER, COLOR_WATER_SHALLOW, DEBUG_DRAW_PHASE_COLLISIONS, HOLE_CAPTURE_RADIUS, MAX_DRAG_LEN
 from tour_teresina_golf.level import Level
 from tour_teresina_golf.play_round import RoundSession, calc_stars
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+from tour_teresina_golf.resource_path import asset
 _FLAG_SCALED_CACHE: dict[tuple[str, int], pygame.Surface] = {}
 
 def _scaled_flag_surface(path: Path, target_h: int) -> pygame.Surface | None:
@@ -67,7 +67,7 @@ def draw_programmatic_hole_and_flag(surface: pygame.Surface, level: Level) -> No
     ri = int(cap)
     pygame.draw.circle(surface, COLOR_HOLE_RING, (int(hx), int(hy)), ri + 3, width=3)
     pygame.draw.circle(surface, COLOR_HOLE, (int(hx), int(hy)), max(4, ri - 4))
-    flag_path = level.flag_sprite_path or _REPO_ROOT / 'acessorios' / 'bandeira.png'
+    flag_path = level.flag_sprite_path or asset('acessorios/bandeira.png')
     target_h = max(55, min(72, BALL_RADIUS * 9))
     flag = _scaled_flag_surface(flag_path, target_h)
     if flag is not None:

@@ -5,6 +5,7 @@ from pathlib import Path
 import pygame
 from tour_teresina_golf.config import SCREEN_HEIGHT, SCREEN_WIDTH
 from tour_teresina_golf.draw_play import blit_ball_skin_preview
+from tour_teresina_golf.resource_path import asset
 from tour_teresina_golf.save_data import SaveData
 MENU_BTN_FILL = (26, 67, 20)
 MENU_BTN_BORDER = (78, 154, 49)
@@ -38,11 +39,9 @@ def main_menu_labels_and_icons() -> tuple[tuple[str, ...], tuple[MenuIcon, ...]]
     if MENU_SHOP_BUTTON_ENABLED:
         return (('JOGAR', 'CONFIGURACOES', 'RANKING', 'LOJA', 'SAIR'), (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.COIN, MenuIcon.DOOR))
     return (('JOGAR', 'CONFIGURACOES', 'RANKING', 'SAIR'), (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.DOOR))
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-_ASSETS = Path(__file__).resolve().parent / 'assets'
-_FONT_PATH = _ASSETS / 'fonts' / 'PressStart2P-Regular.ttf'
-_INTRO_MENUS_PATH = _REPO_ROOT / 'Menus' / 'intro.png'
-_BG_PATH = _ASSETS / 'menu_background.png'
+_FONT_PATH = asset('tour_teresina_golf/assets/fonts/PressStart2P-Regular.ttf')
+_INTRO_MENUS_PATH = asset('Menus/intro.png')
+_BG_PATH = asset('tour_teresina_golf/assets/menu_background.png')
 
 def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
     return pygame.Rect(0, 0, w, h).move(center_x - w // 2, center_y - h // 2)
