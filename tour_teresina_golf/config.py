@@ -1,48 +1,25 @@
-"""Constantes globais e paleta (referência: GDD — clima quente, asfalto, áreas verdes)."""
-
 from __future__ import annotations
-
-# Resolução lógica (simulação e níveis; o vídeo escala isto para o ecrã)
 LOGICAL_W = 960
 LOGICAL_H = 540
 SCREEN_WIDTH = LOGICAL_W
 SCREEN_HEIGHT = LOGICAL_H
-TITLE = "Tour Teresina Golf"
-
-# Desenvolvimento: True desenha retângulos de colisão da fase a vermelho durante o jogo
+TITLE = 'Tour Teresina Golf'
 DEBUG_DRAW_PHASE_COLLISIONS = False
-
-# Nível ao clicar «Jogar» no menu: None ou "fase1" = começar na fase 1; "fase2" / "fase3" para testes.
-# Também podes usar: python main.py fase3
 START_LEVEL_ID: str | None = None
-
-# Simulação
 FIXED_DT = 1.0 / 120.0
 MAX_PHYS_STEPS = 12
-# Limite de passos de física por frame (evita espiral se o relógio atrasar)
 PHYS_ACCUM_LIMIT = 256
-
-# Bola
 BALL_RADIUS = 3
 MAX_SPEED = 1100.0
 RESTITUTION = 0.72
 FRICTION_PER_SEC = 2.15
-
-# Tacada (estilingue): arrasto normalizado entre deadzone e MAX_DRAG_LEN → velocidade linear até MAX_SHOT_SPEED
 AIM_GRAB_RADIUS = 52
-MIN_DRAG_SHOT = 4  # deadzone (px); abaixo disto cancela sem tacada
+MIN_DRAG_SHOT = 4
 MAX_DRAG_LEN = 220
-# Antigo teto: MAX_DRAG_LEN * POWER_SCALE ≈ 3190 px/s de magnitude inicial
 MAX_SHOT_SPEED = 1000.0
-
-# Buraco
 HOLE_CAPTURE_RADIUS = 22
-# Paragem numérica (bola “idle” para pegar na mão / proxima tacada)
 STOP_SPEED_SQ = 24.0 * 24.0
-# Vitória com bola ainda a mover-se lentamente dentro do raio (GDD: velocidade baixa)
 HOLE_WIN_SPEED_SQ = 50.0 * 50.0
-
-# Cores — gameplay placeholder alinhado a moodboard urbano / verde (sec. 6 GDD)
 COLOR_BG_TOP = (255, 178, 102)
 COLOR_BG_BOTTOM = (92, 58, 42)
 COLOR_FAIRWAY = (52, 112, 72)
@@ -57,16 +34,7 @@ COLOR_BALL = (245, 245, 245)
 COLOR_BALL_SHADOW = (0, 0, 0, 90)
 COLOR_UI_TEXT = (255, 248, 235)
 COLOR_UI_ACCENT = (255, 214, 120)
-
-# Intro / UI
 INTRO_TITLE_COLOR = (255, 235, 200)
 INTRO_SUB_COLOR = (255, 200, 140)
-
 COINS_PER_STAR = 50
-
-SKIN_CATALOG: list[tuple[str, str, int]] = [
-    ("default", "Bola Padrao", 0),
-    ("capivara", "Bola Capivara", 100),
-    ("sol40", "Bola Sol de 40", 200),
-    ("brfc", "Bola B-R-O FC", 300),
-]
+SKIN_CATALOG: list[tuple[str, str, int]] = [('default', 'Bola Padrao', 0), ('capivara', 'Bola Capivara', 100), ('sol40', 'Bola Sol de 40', 200), ('brfc', 'Bola B-R-O FC', 300)]

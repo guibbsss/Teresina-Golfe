@@ -1,15 +1,38 @@
-"""Buffer lógico 960×540, escala para janela ou fullscreen com letterbox e conversão do rato."""
-
 from __future__ import annotations
-
 import pygame
-
 from tour_teresina_golf.config import LOGICAL_H, LOGICAL_W
 from tour_teresina_golf.settings import UserSettings
 
+_CHROME_MARGIN_X = 48
+_CHROME_MARGIN_Y = 96
+
+
+def _max_safe_window_scale() -> int:
+    """Maior escala inteira em que LOGICAL_W/H * escala cabe na área útil do monitor principal."""
+    dw = dh = 0
+    try:
+        sizes = pygame.display.get_desktop_sizes()
+        if sizes:
+            dw, dh = int(sizes[0][0]), int(sizes[0][1])
+    except (AttributeError, TypeError, ValueError, pygame.error):
+        pass
+    if dw < LOGICAL_W or dh < LOGICAL_H:
+        try:
+            info = pygame.display.Info()
+            dw = max(dw, int(info.current_w))
+            dh = max(dh, int(info.current_h))
+        except (AttributeError, TypeError, ValueError, pygame.error):
+            pass
+    if dw < LOGICAL_W or dh < LOGICAL_H:
+        return 6
+    avail_w = max(LOGICAL_W, dw - _CHROME_MARGIN_X)
+    avail_h = max(LOGICAL_H, dh - _CHROME_MARGIN_Y)
+    max_sw = avail_w // LOGICAL_W
+    max_sh = avail_h // LOGICAL_H
+    return max(1, min(6, min(max_sw, max_sh)))
+
 
 class DisplayPresenter:
-    """Mantém flags de apresentação e mapeia coordenadas janela ↔ espaço lógico."""
 
     def __init__(self) -> None:
         self._fullscreen = False
@@ -23,7 +46,6 @@ class DisplayPresenter:
         self._window_scale = max(1, min(6, s.window_scale))
 
     def update_after_flip(self) -> None:
-        """Recalcula letterbox após set_mode (fullscreen pode mudar tamanho real)."""
         surf = pygame.display.get_surface()
         if surf is None:
             return
@@ -36,16 +58,22 @@ class DisplayPresenter:
             self._letter_offset_x = (dw - sw) // 2
             self._letter_offset_y = (dh - sh) // 2
         else:
-            self._present_scale = float(self._window_scale)
+            sx = dw / float(LOGICAL_W)
+            sy = dh / float(LOGICAL_H)
+            self._present_scale = min(sx, sy)
             self._letter_offset_x = 0
             self._letter_offset_y = 0
 
     def apply_video_mode(self, s: UserSettings) -> pygame.Surface:
-        """Cria ou altera o modo de vídeo; devolve a superfície principal (tamanho físico)."""
         self.configure_from_settings(s)
         if s.fullscreen:
             screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
+            max_s = _max_safe_window_scale()
+            if self._window_scale > max_s:
+                self._window_scale = max_s
+                s.window_scale = max_s
+                s.clamp()
             w = LOGICAL_W * self._window_scale
             h = LOGICAL_H * self._window_scale
             screen = pygame.display.set_mode((w, h))
@@ -53,7 +81,7 @@ class DisplayPresenter:
         return screen
 
     def window_to_logical(self, pos: tuple[int, int]) -> tuple[float, float]:
-        mx, my = float(pos[0]), float(pos[1])
+        mx, my = (float(pos[0]), float(pos[1]))
         if self._fullscreen:
             lx = (mx - self._letter_offset_x) / self._present_scale
             ly = (my - self._letter_offset_y) / self._present_scale
@@ -62,16 +90,13 @@ class DisplayPresenter:
             ly = my / self._present_scale
         lx = max(0.0, min(float(LOGICAL_W - 1), lx))
         ly = max(0.0, min(float(LOGICAL_H - 1), ly))
-        return lx, ly
+        return (lx, ly)
 
     def present(self, logical: pygame.Surface, physical: pygame.Surface) -> None:
-        """Escala o buffer lógico para o rect central e copia para o ecrã."""
         dw, dh = physical.get_size()
         if self._fullscreen:
-            # Mesmas dimensões que update_after_flip() (letterbox + window_to_logical).
             sw = int(LOGICAL_W * self._present_scale)
             sh = int(LOGICAL_H * self._present_scale)
-            # scale (vizinho mais próximo) mantém texto/HUD legíveis; smoothscale borrava UI no fullscreen
             scaled = pygame.transform.scale(logical, (sw, sh))
             physical.fill((0, 0, 0))
             physical.blit(scaled, (self._letter_offset_x, self._letter_offset_y))
