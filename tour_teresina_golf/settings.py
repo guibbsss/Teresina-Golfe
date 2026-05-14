@@ -8,6 +8,7 @@ SETTINGS_FILE_VERSION = 1
 class UserSettings:
     fullscreen: bool = False
     window_scale: int = 2
+    music_enabled: bool = True
     settings_version: int = SETTINGS_FILE_VERSION
 
     def clamp(self) -> None:
@@ -28,9 +29,10 @@ def load_settings() -> UserSettings:
         ver = data.get('settings_version')
         ws = int(data.get('window_scale', 2))
         fs = bool(data.get('fullscreen', False))
+        me = bool(data.get('music_enabled', True))
         if ver is None:
             fs = False
-        s = UserSettings(fullscreen=fs, window_scale=ws, settings_version=SETTINGS_FILE_VERSION)
+        s = UserSettings(fullscreen=fs, window_scale=ws, music_enabled=me, settings_version=SETTINGS_FILE_VERSION)
         s.clamp()
         if ver is None:
             save_settings(s)

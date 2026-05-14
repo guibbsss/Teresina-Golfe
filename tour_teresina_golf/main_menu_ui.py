@@ -40,6 +40,37 @@ def main_menu_labels_and_icons() -> tuple[tuple[str, ...], tuple[MenuIcon, ...]]
         return (('JOGAR', 'CONFIGURACOES', 'RANKING', 'LOJA', 'SAIR'), (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.COIN, MenuIcon.DOOR))
     return (('JOGAR', 'CONFIGURACOES', 'RANKING', 'SAIR'), (MenuIcon.PLAY, MenuIcon.GEAR, MenuIcon.TROPHY, MenuIcon.DOOR))
 _FONT_PATH = asset('tour_teresina_golf/assets/fonts/PressStart2P-Regular.ttf')
+_ICON_SIZE = 26
+_icon_paths: dict[MenuIcon, str] = {
+    MenuIcon.PLAY:   'botoes/icons/golf-flag.png',
+    MenuIcon.GEAR:   'botoes/icons/cog.png',
+    MenuIcon.TROPHY: 'botoes/icons/trophy-cup.png',
+    MenuIcon.COIN:   'botoes/icons/coins.png',
+    MenuIcon.DOOR:   'botoes/icons/exit-door.png',
+}
+_icon_cache: dict[MenuIcon, pygame.Surface] = {}
+
+def _strip_black_bg(raw: pygame.Surface) -> pygame.Surface:
+    # Scale first (black still opaque) so anti-aliasing blends correctly,
+    # then use each pixel's max(R,G,B) as its alpha value.
+    # White icon pixels → alpha 255; black background → alpha 0; grey edges → proportional.
+    scaled = pygame.transform.smoothscale(raw.convert(), (_ICON_SIZE, _ICON_SIZE))
+    result = pygame.Surface((_ICON_SIZE, _ICON_SIZE), pygame.SRCALPHA)
+    for y in range(_ICON_SIZE):
+        for x in range(_ICON_SIZE):
+            r, g, b = scaled.get_at((x, y))[:3]
+            result.set_at((x, y), (r, g, b, max(r, g, b)))
+    return result
+
+def _load_icons() -> None:
+    for kind, rel in _icon_paths.items():
+        p = asset(rel)
+        if not p.is_file():
+            continue
+        try:
+            _icon_cache[kind] = _strip_black_bg(pygame.image.load(str(p)))
+        except pygame.error:
+            pass
 _INTRO_MENUS_PATH = asset('Menus/intro.png')
 _BG_PATH = asset('tour_teresina_golf/assets/menu_background.png')
 
@@ -48,6 +79,7 @@ def _button_rect(center_x: int, center_y: int, w: int, h: int) -> pygame.Rect:
 
 def load_menu_pixel_fonts() -> tuple[pygame.font.Font, pygame.font.Font, pygame.font.Font]:
     pygame.font.init()
+    _load_icons()
     if _FONT_PATH.is_file():
         return (pygame.font.Font(str(_FONT_PATH), 18), pygame.font.Font(str(_FONT_PATH), 14), pygame.font.Font(str(_FONT_PATH), 12))
     f18 = pygame.font.SysFont('consolas', 18, bold=True)
@@ -115,22 +147,24 @@ def compute_main_menu_button_rects() -> list[pygame.Rect]:
         rects.append(pygame.Rect(cx - BTN_W // 2, cy - BTN_H // 2, BTN_W, BTN_H))
     return rects
 
-def compute_settings_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
+def compute_settings_panel_rects() -> tuple[pygame.Rect, pygame.Rect, pygame.Rect]:
     PANEL_W = 340
     cx = SCREEN_WIDTH // 2
-    h_fs, h_back = (46, 46)
+    h_btn, h_back = (46, 46)
     y_bottom_center, step = _main_menu_stack_vertical_centers()
-    cy_back = int(y_bottom_center - 0 * step)
-    cy_fs = int(y_bottom_center - 1 * step)
-    opt_toggle_fs = _button_rect(cx, cy_fs, PANEL_W, h_fs)
-    opt_back = _button_rect(cx, cy_back, 260, h_back)
-    return (opt_toggle_fs, opt_back)
+    cy_back   = int(y_bottom_center - 0 * step)
+    cy_music  = int(y_bottom_center - 1 * step)
+    cy_fs     = int(y_bottom_center - 2 * step)
+    opt_toggle_fs    = _button_rect(cx, cy_fs,    PANEL_W, h_btn)
+    opt_toggle_music = _button_rect(cx, cy_music, PANEL_W, h_btn)
+    opt_back         = _button_rect(cx, cy_back,  260,     h_back)
+    return (opt_toggle_fs, opt_toggle_music, opt_back)
 
 def compute_ranking_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
-    panel_w = min(940, SCREEN_WIDTH - 20)
-    panel_h = 280
-    box = pygame.Rect(SCREEN_WIDTH // 2 - panel_w // 2, SCREEN_HEIGHT // 2 - 140, panel_w, panel_h)
-    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 18, 200, 44)
+    panel_w = min(860, SCREEN_WIDTH - 40)
+    panel_h = 318
+    box = pygame.Rect(SCREEN_WIDTH // 2 - panel_w // 2, SCREEN_HEIGHT // 2 - panel_h // 2 - 12, panel_w, panel_h)
+    back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 22, 200, 44)
     return (box, back)
 
 def compute_credits_panel_rects() -> tuple[pygame.Rect, pygame.Rect]:
@@ -161,42 +195,65 @@ def compute_shop_panel_rects(catalog: list[tuple[str, str, int]]) -> tuple[pygam
     back = _button_rect(SCREEN_WIDTH // 2, box.bottom + 20, 200, 44)
     return (box, item_rects, back)
 
-def _draw_icon_play(surf: pygame.Surface, cx: int, cy: int, size: int=12) -> None:
-    pts = [(cx - size // 2, cy - size // 2), (cx - size // 2, cy + size // 2), (cx + size // 2, cy)]
-    pygame.draw.polygon(surf, MENU_ICON_PLAY, pts)
+def _draw_icon_play(surf: pygame.Surface, cx: int, cy: int, size: int = 12) -> None:
+    # Golf flag: pole + triangular flag + ball
+    px = cx - 3
+    pygame.draw.line(surf, MENU_ICON_PLAY, (px, cy + size // 2), (px, cy - size), 2)
+    flag = [(px, cy - size), (px, cy - size + size // 2), (px + size - 2, cy - size + size // 4)]
+    pygame.draw.polygon(surf, MENU_ICON_PLAY, flag)
+    pygame.draw.circle(surf, (235, 235, 235), (px + 3, cy + size // 2), 4)
 
 def _draw_icon_gear(surf: pygame.Surface, cx: int, cy: int) -> None:
-    r = 10
-    pygame.draw.circle(surf, MENU_ICON_GEAR, (cx, cy), r, 2)
-    for i in range(8):
-        ang = i * math.pi / 4
-        x1 = cx + math.cos(ang) * (r - 2)
-        y1 = cy + math.sin(ang) * (r - 2)
-        x2 = cx + math.cos(ang) * (r + 5)
-        y2 = cy + math.sin(ang) * (r + 5)
-        pygame.draw.line(surf, MENU_ICON_GEAR, (x1, y1), (x2, y2), 2)
+    # Gear: star-like polygon with 6 teeth + hub circle
+    TEETH = 6
+    r_outer, r_inner_teeth = 11, 7
+    pts: list[tuple[int, int]] = []
+    for i in range(TEETH * 2):
+        a = i * math.pi / TEETH - math.pi / 2
+        r = r_outer if i % 2 == 0 else r_inner_teeth
+        pts.append((int(cx + math.cos(a) * r), int(cy + math.sin(a) * r)))
+    pygame.draw.polygon(surf, MENU_ICON_GEAR, pts)
+    pygame.draw.circle(surf, (80, 95, 80), (cx, cy), 4)
 
 def _draw_icon_trophy(surf: pygame.Surface, cx: int, cy: int) -> None:
-    pygame.draw.polygon(surf, MENU_ICON_TROPHY, [(cx, cy - 10), (cx - 9, cy + 6), (cx + 9, cy + 6)])
-    pygame.draw.rect(surf, MENU_ICON_TROPHY, (cx - 10, cy + 6, 20, 5))
-    pygame.draw.rect(surf, MENU_ICON_TROPHY, (cx - 6, cy + 10, 12, 4))
+    # Cup body
+    cup = [(cx - 8, cy - 10), (cx + 8, cy - 10), (cx + 6, cy), (cx + 3, cy + 5), (cx - 3, cy + 5), (cx - 6, cy)]
+    pygame.draw.polygon(surf, MENU_ICON_TROPHY, cup)
+    # Handles
+    pygame.draw.arc(surf, MENU_ICON_TROPHY, pygame.Rect(cx + 5, cy - 8, 7, 10), math.pi * 0.25, math.pi * 0.85, 2)
+    pygame.draw.arc(surf, MENU_ICON_TROPHY, pygame.Rect(cx - 12, cy - 8, 7, 10), math.pi * 1.15, math.pi * 1.75, 2)
+    # Stem + base
+    pygame.draw.rect(surf, MENU_ICON_TROPHY, pygame.Rect(cx - 2, cy + 5, 4, 4))
+    pygame.draw.rect(surf, MENU_ICON_TROPHY, pygame.Rect(cx - 6, cy + 9, 12, 3), border_radius=1)
 
 def _draw_icon_door(surf: pygame.Surface, cx: int, cy: int) -> None:
-    pygame.draw.rect(surf, MENU_ICON_DOOR, (cx - 9, cy - 10, 18, 22), border_radius=2)
-    pygame.draw.circle(surf, (220, 200, 120), (cx + 4, cy), 2)
-    pygame.draw.polygon(surf, (120, 200, 100), [(cx - 4, cy - 3), (cx - 4, cy + 3), (cx + 4, cy)])
+    # Door frame (outline only)
+    pygame.draw.rect(surf, MENU_ICON_DOOR, pygame.Rect(cx - 9, cy - 11, 16, 22), width=2, border_radius=2)
+    # Doorknob
+    pygame.draw.circle(surf, (220, 200, 120), (cx - 1, cy), 2)
+    # Exit arrow pointing right
+    ax = cx + 4
+    arrow = [(ax, cy - 4), (ax, cy + 4), (ax + 7, cy)]
+    pygame.draw.polygon(surf, (160, 220, 100), arrow)
 
 def _draw_icon_coin(surf: pygame.Surface, cx: int, cy: int) -> None:
-    pygame.draw.circle(surf, MENU_ICON_COIN, (cx, cy), 10)
-    pygame.draw.circle(surf, (200, 160, 40), (cx, cy), 10, width=2)
-    pygame.draw.arc(surf, (40, 30, 20), (cx - 6, cy - 6, 12, 12), 0.9, 2.6, 2)
+    # Coin: filled circle + ring + inner ring
+    pygame.draw.circle(surf, MENU_ICON_COIN, (cx, cy), 11)
+    pygame.draw.circle(surf, (190, 148, 30), (cx, cy), 11, width=2)
+    pygame.draw.circle(surf, (190, 148, 30), (cx, cy), 7, width=1)
+    # "C" hint
+    pygame.draw.arc(surf, (120, 90, 20), pygame.Rect(cx - 4, cy - 4, 8, 8), math.pi * 0.25, math.pi * 1.75, 2)
 
 def _draw_icon_info(surf: pygame.Surface, cx: int, cy: int) -> None:
     pygame.draw.circle(surf, MENU_ICON_INFO, (cx, cy), 10, width=2)
-    pygame.draw.rect(surf, MENU_ICON_INFO, (cx - 1, cy - 5, 3, 3))
-    pygame.draw.rect(surf, MENU_ICON_INFO, (cx - 1, cy - 1, 3, 7))
+    pygame.draw.rect(surf, MENU_ICON_INFO, pygame.Rect(cx - 1, cy - 5, 3, 3))
+    pygame.draw.rect(surf, MENU_ICON_INFO, pygame.Rect(cx - 1, cy - 1, 3, 7))
 
 def _draw_menu_icon(surf: pygame.Surface, kind: MenuIcon, cx: int, cy: int) -> None:
+    img = _icon_cache.get(kind)
+    if img is not None:
+        surf.blit(img, img.get_rect(center=(cx, cy)))
+        return
     if kind == MenuIcon.PLAY:
         _draw_icon_play(surf, cx, cy)
     elif kind == MenuIcon.GEAR:
@@ -213,27 +270,53 @@ def draw_menu_credits_chip(surf: pygame.Surface, rect: pygame.Rect) -> None:
     pygame.draw.rect(surf, MENU_BTN_BORDER, rect, width=2, border_radius=6)
     _draw_icon_info(surf, rect.centerx, rect.centery)
 
-def draw_main_menu_buttons(surf: pygame.Surface, font_label: pygame.font.Font, rects: list[pygame.Rect], labels: tuple[str, ...], icons: tuple[MenuIcon, ...]) -> None:
-    for rect, label, icon in zip(rects, labels, icons):
-        pygame.draw.rect(surf, MENU_BTN_FILL, rect, border_radius=8)
-        pygame.draw.rect(surf, MENU_BTN_BORDER, rect, width=2, border_radius=8)
+def draw_main_menu_buttons(surf: pygame.Surface, font_title: pygame.font.Font, font_label: pygame.font.Font, rects: list[pygame.Rect], labels: tuple[str, ...], icons: tuple[MenuIcon, ...]) -> None:
+    if not rects:
+        return
+    panel = rects[0].unionall(rects[1:]).inflate(20, 16)
+    overlay = pygame.Surface((panel.width, panel.height), pygame.SRCALPHA)
+    overlay.fill((4, 16, 4, 148))
+    surf.blit(overlay, panel.topleft)
+    for i, (rect, label, icon) in enumerate(zip(rects, labels, icons)):
+        if i == 0:
+            fill = (28, 75, 18)
+            border = (210, 178, 45)
+            text_color = (255, 218, 55)
+            font = font_title
+            radius = 10
+        else:
+            fill = MENU_BTN_FILL
+            border = MENU_BTN_BORDER
+            text_color = MENU_BTN_TEXT
+            font = font_label
+            radius = 8
+        pygame.draw.rect(surf, fill, rect, border_radius=radius)
+        pygame.draw.rect(surf, border, rect, width=2, border_radius=radius)
         icx = rect.left + 26
-        icy = rect.centery
-        _draw_menu_icon(surf, icon, icx, icy)
-        tx = font_label.render(label, True, MENU_BTN_TEXT)
+        _draw_menu_icon(surf, icon, icx, rect.centery)
+        tx = font.render(label, True, text_color)
         surf.blit(tx, tx.get_rect(midleft=(rect.left + 48, rect.centery)))
 
 def draw_menu_background(surf: pygame.Surface, bg: pygame.Surface) -> None:
     surf.blit(bg, (0, 0))
 
-def draw_settings_overlay(surf: pygame.Surface, font_ui: pygame.font.Font, font_small: pygame.font.Font, settings: object, rects: tuple[pygame.Rect, pygame.Rect]) -> None:
-    opt_toggle_fs_rect, opt_back_rect = rects
-    fs = getattr(settings, 'fullscreen')
-    fs_label = 'Ecra inteiro: ligado' if fs else 'Ecra inteiro: desligado'
-    pygame.draw.rect(surf, MENU_BTN_FILL, opt_toggle_fs_rect, border_radius=8)
-    pygame.draw.rect(surf, MENU_BTN_BORDER, opt_toggle_fs_rect, width=2, border_radius=8)
-    t_fs = font_ui.render(fs_label, True, MENU_BTN_TEXT)
-    surf.blit(t_fs, t_fs.get_rect(center=opt_toggle_fs_rect.center))
+def _draw_toggle_btn(surf: pygame.Surface, font: pygame.font.Font, rect: pygame.Rect, label: str, enabled: bool) -> None:
+    fill   = (28, 75, 18)  if enabled else MENU_BTN_FILL
+    border = (210, 178, 45) if enabled else MENU_BTN_BORDER
+    pygame.draw.rect(surf, fill, rect, border_radius=8)
+    pygame.draw.rect(surf, border, rect, width=2, border_radius=8)
+    state = 'LIGADO' if enabled else 'DESLIGADO'
+    state_color = (255, 218, 55) if enabled else (160, 150, 130)
+    pad = rect.width // 2 - 10
+    t_label = font.render(label, True, MENU_BTN_TEXT)
+    t_state = font.render(state, True, state_color)
+    surf.blit(t_label, t_label.get_rect(midleft=(rect.left + 18, rect.centery)))
+    surf.blit(t_state, t_state.get_rect(midright=(rect.right - 18, rect.centery)))
+
+def draw_settings_overlay(surf: pygame.Surface, font_ui: pygame.font.Font, font_small: pygame.font.Font, settings: object, rects: tuple[pygame.Rect, pygame.Rect, pygame.Rect]) -> None:
+    opt_toggle_fs_rect, opt_toggle_music_rect, opt_back_rect = rects
+    _draw_toggle_btn(surf, font_small, opt_toggle_fs_rect,    'Tela cheia', getattr(settings, 'fullscreen'))
+    _draw_toggle_btn(surf, font_small, opt_toggle_music_rect, 'Musica',     getattr(settings, 'music_enabled'))
     pygame.draw.rect(surf, MENU_BTN_FILL, opt_back_rect, border_radius=8)
     pygame.draw.rect(surf, MENU_BTN_BORDER, opt_back_rect, width=2, border_radius=8)
     t_back = font_small.render('VOLTAR', True, MENU_BTN_TEXT)
@@ -267,56 +350,79 @@ def draw_ranking_overlay(surf: pygame.Surface, font_title: pygame.font.Font, fon
     surf.blit(veil, (0, 0))
     pygame.draw.rect(surf, (22, 38, 22), box_rect, border_radius=14)
     pygame.draw.rect(surf, MENU_BTN_BORDER, box_rect, width=3, border_radius=14)
+
     t = font_title.render('RANKING', True, MENU_BTN_TEXT)
-    surf.blit(t, t.get_rect(midtop=(box_rect.centerx, box_rect.top + 18)))
-    phase_info = (('fase1', 'Avenida Frei Serafim'), ('fase2', 'Ponte Estaiada'), ('fase3', 'Encontro dos Rios'))
-    gold = (255, 214, 80)
-    dim = (100, 90, 60)
+    surf.blit(t, t.get_rect(midtop=(box_rect.centerx, box_rect.top + 14)))
+    sep_y = box_rect.top + 44
+    pygame.draw.line(surf, MENU_BTN_BORDER, (box_rect.left + 14, sep_y), (box_rect.right - 14, sep_y), 1)
+
+    phase_info = (
+        ('fase1', 'Av. Frei Serafim',   (40, 100, 35)),
+        ('fase2', 'Ponte Estaiada',      (30,  70, 120)),
+        ('fase3', 'Encontro dos Rios',   (90,  55,  25)),
+    )
+    gold  = (255, 214, 80)
+    dim   = (80, 72, 45)
     text_c = (220, 215, 200)
-    muted = (160, 150, 130)
-    row_y = box_rect.top + 54
-    row_h = 58
-    left_pad = 14
-    right_pad = 12
-    r_col_w = 176
-    after_label_gap = 22
-    result_col_left_max = box_rect.right - right_pad - r_col_w
-    label_x = box_rect.left + left_pad
-    max_label_w = max(160, result_col_left_max - label_x - after_label_gap)
-    for pid, label in phase_info:
+    muted  = (160, 150, 130)
+
+    CARD_H   = 72
+    CARD_GAP = 8
+    BADGE_W  = 58
+    STAR_OUT = 10
+    STAR_SLOT = 2 * STAR_OUT + 4
+    STARS_W  = 3 * STAR_SLOT - 4   # 68 px
+    RIGHT_W  = STARS_W + 16        # right zone width
+
+    card_w   = box_rect.width - 24
+    cards_x  = box_rect.left + 12
+    cards_top = sep_y + 10
+
+    for i, (pid, label, badge_clr) in enumerate(phase_info):
+        cy_card = cards_top + i * (CARD_H + CARD_GAP)
+        card_rect = pygame.Rect(cards_x, cy_card, card_w, CARD_H)
+
+        pygame.draw.rect(surf, (28, 52, 28), card_rect, border_radius=10)
+
+        badge_rect = pygame.Rect(card_rect.left, card_rect.top, BADGE_W, CARD_H)
+        pygame.draw.rect(surf, badge_clr, badge_rect,
+                         border_top_left_radius=10, border_bottom_left_radius=10,
+                         border_top_right_radius=0, border_bottom_right_radius=0)
+
+        pygame.draw.rect(surf, (50, 96, 42), card_rect, width=2, border_radius=10)
+
+        t_fase = font_ui.render('FASE', True, (210, 230, 210))
+        t_num  = font_title.render(str(i + 1), True, (255, 255, 255))
+        surf.blit(t_fase, t_fase.get_rect(midbottom=(badge_rect.centerx, badge_rect.centery - 1)))
+        surf.blit(t_num,  t_num.get_rect(midtop=(badge_rect.centerx,    badge_rect.centery + 2)))
+
         rec = getattr(save_data, pid, None)
-        stars_val = rec.stars if rec is not None else 0
+        stars_val   = rec.stars        if rec is not None else 0
         strokes_used = rec.strokes_used if rec is not None else 999
-        full = f'Fase {label}'
-        t_label = _fit_label_surface(font_ui, full, max_label_w, text_c)
-        surf.blit(t_label, (label_x, row_y + (row_h - t_label.get_height()) // 2))
-        label_right = label_x + t_label.get_width()
-        stars_zone_left = min(label_right + after_label_gap, result_col_left_max)
-        zone_cx = stars_zone_left + r_col_w // 2
-        row_cy = row_y + row_h // 2
+
+        name_x   = card_rect.left + BADGE_W + 14
+        right_x  = card_rect.right - 14
+        max_name_w = right_x - RIGHT_W - 16 - name_x
+        t_name = _fit_label_surface(font_ui, label, max(60, max_name_w), text_c)
+        surf.blit(t_name, t_name.get_rect(midleft=(name_x, card_rect.centery)))
+
         if stars_val == 0:
             t_none = font_ui.render('Nao jogada', True, muted)
-            surf.blit(t_none, t_none.get_rect(center=(zone_cx, row_cy)))
+            surf.blit(t_none, t_none.get_rect(midright=(right_x, card_rect.centery)))
         else:
-            outer = max(6, font_ui.get_height() // 3)
-            pitch = max(3, outer // 3)
-            slot = 2 * outer + pitch
-            total_sw = 3 * slot - pitch
-            sx0 = zone_cx - total_sw // 2 + outer
-            cy_s = row_cy - 8
-            for i in range(3):
-                filled = i < stars_val
-                cx_s = sx0 + i * slot
-                pts = _five_point_star_points(float(cx_s), float(cy_s), float(outer))
-                w_line = max(1, outer // 5)
-                if filled:
+            sx0 = right_x - STARS_W + STAR_OUT
+            sy  = card_rect.centery - 10
+            for j in range(3):
+                scx = sx0 + j * STAR_SLOT
+                pts = _five_point_star_points(float(scx), float(sy), float(STAR_OUT))
+                if j < stars_val:
                     pygame.draw.polygon(surf, gold, pts)
                 else:
-                    pygame.draw.polygon(surf, dim, pts, width=w_line)
+                    pygame.draw.polygon(surf, dim, pts, width=2)
             if strokes_used < 900:
                 t_st = font_ui.render(f'{strokes_used} tacadas', True, muted)
-                surf.blit(t_st, t_st.get_rect(midtop=(zone_cx, cy_s + outer + 8)))
-        row_y += row_h
+                surf.blit(t_st, t_st.get_rect(midright=(right_x, card_rect.centery + 14)))
+
     pygame.draw.rect(surf, MENU_BTN_FILL, back_rect, border_radius=8)
     pygame.draw.rect(surf, MENU_BTN_BORDER, back_rect, width=2, border_radius=8)
     vb = font_ui.render('VOLTAR', True, MENU_BTN_TEXT)
@@ -339,7 +445,7 @@ def draw_credits_overlay(surf: pygame.Surface, font_title: pygame.font.Font, fon
     g2 = 'Guilherme Ruben Pereira Matos'
     f_g1 = font_small if font_ui.size(g1)[0] > max_text_w else font_ui
     f_g2 = font_small if font_ui.size(g2)[0] > max_text_w else font_ui
-    y_tech = box_rect.top + 174
+    y_tech = box_rect.top + 138
     c_sec = (180, 200, 160)
     c_name = (240, 240, 220)
     c_role = (160, 180, 140)
@@ -349,12 +455,8 @@ def draw_credits_overlay(surf: pygame.Surface, font_title: pygame.font.Font, fon
     surf.blit(t_eq, (lx + 20, box_rect.top + 60))
     s1 = f_g1.render(g1, True, c_name)
     surf.blit(s1, (lx + 28, box_rect.top + 82))
-    r1 = font_small.render('Programacao e Fisica', True, c_role)
-    surf.blit(r1, (lx + 38, box_rect.top + 100))
     s2 = f_g2.render(g2, True, c_name)
-    surf.blit(s2, (lx + 28, box_rect.top + 124))
-    r2 = font_small.render('Assets e Level Design', True, c_role)
-    surf.blit(r2, (lx + 38, box_rect.top + 142))
+    surf.blit(s2, (lx + 28, box_rect.top + 106))
     sep_y2 = y_tech - 12
     pygame.draw.line(surf, MENU_BTN_BORDER, (box_rect.left + 12, sep_y2), (box_rect.right - 12, sep_y2), 1)
     t_tec = font_ui.render('TECNOLOGIA', True, c_sec)

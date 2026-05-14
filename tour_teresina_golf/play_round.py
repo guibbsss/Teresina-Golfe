@@ -41,6 +41,7 @@ class RoundSession:
     aiming: bool
     aim_anchor_x: float
     aim_anchor_y: float
+    wall_hit_cd: int = 0
 
     @classmethod
     def new(cls, level: Level) -> RoundSession:
@@ -56,6 +57,7 @@ class RoundSession:
         self.rolling = False
         self.aiming = False
         self.strokes_left = self.level.strokes
+        self.wall_hit_cd = 0
 
     def respawn_at_spawn_keep_strokes(self) -> None:
         x, y = self.level.ball_spawn
@@ -85,6 +87,9 @@ class RoundSession:
     def physics_step(self, dt: float) -> RoundOutcome:
         self.ball_x += self.ball_vx * dt
         self.ball_y += self.ball_vy * dt
+        if self.wall_hit_cd > 0:
+            self.wall_hit_cd -= 1
+        prev_vx, prev_vy = self.ball_vx, self.ball_vy
         cg = self.level.collision_grid
         if cg is not None:
             bx, by, bvx, bvy = collide_ball_bitmap(self.ball_x, self.ball_y, self.ball_vx, self.ball_vy, BALL_RADIUS, cg)
@@ -92,6 +97,11 @@ class RoundSession:
             bx, by, bvx, bvy = collide_ball_all_rects(self.ball_x, self.ball_y, self.ball_vx, self.ball_vy, BALL_RADIUS, self.all_solids())
         self.ball_x, self.ball_y = (bx, by)
         self.ball_vx, self.ball_vy = (bvx, bvy)
+        if (self.wall_hit_cd == 0
+                and (prev_vx * prev_vx + prev_vy * prev_vy) > 100.0
+                and (bvx * prev_vx < 0 or bvy * prev_vy < 0)):
+            audio_stub.play_wall_hit()
+            self.wall_hit_cd = 24
         wg = self.level.water_grid
         if wg is not None and circle_overlaps_collision_grid(wg, self.ball_x, self.ball_y, BALL_RADIUS, 16):
             audio_stub.play_water_splash()

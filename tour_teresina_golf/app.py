@@ -160,6 +160,7 @@ def run() -> None:
     menu_panel = MenuPanel.MAIN
     menu_btn_rects = compute_main_menu_button_rects()
     settings_rects = compute_settings_panel_rects()
+    opt_toggle_fs_rect, opt_toggle_music_rect, opt_back_rect = settings_rects
     ranking_box_rect, ranking_back_rect = compute_ranking_panel_rects()
     credits_box_rect, credits_back_rect = compute_credits_panel_rects()
     menu_credits_chip_rect = compute_menu_credits_chip_rect()
@@ -223,7 +224,6 @@ def run() -> None:
                     audio_stub.play_ui_confirm()
                     screen_state = GameScreen.MENU
             elif screen_state == GameScreen.MENU:
-                opt_toggle_fs_rect, opt_back_rect = settings_rects
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     if menu_panel == MenuPanel.SETTINGS:
                         menu_panel = MenuPanel.MAIN
@@ -243,6 +243,7 @@ def run() -> None:
                             start_id = START_LEVEL_ID if START_LEVEL_ID in ('fase1', 'fase2', 'fase3') else 'fase1'
                             session = RoundSession.new(make_level_by_id(start_id))
                             phys_accum = 0.0
+                            if settings.music_enabled: audio_stub.start_music()
                             screen_state = GameScreen.PLAY
                         elif menu_btn_rects[1].collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
@@ -260,6 +261,11 @@ def run() -> None:
                             settings.fullscreen = not settings.fullscreen
                             physical_screen = presenter.apply_video_mode(settings)
                             save_settings(settings)
+                        elif opt_toggle_music_rect.collidepoint(ev_mx, ev_my):
+                            settings.music_enabled = not settings.music_enabled
+                            save_settings(settings)
+                            if not settings.music_enabled:
+                                audio_stub.stop_music()
                         elif opt_back_rect.collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
                             menu_panel = MenuPanel.MAIN
@@ -295,6 +301,7 @@ def run() -> None:
                     session.release_shot(ev_mx, ev_my)
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     session.cancel_aim()
+                    audio_stub.pause_music()
                     screen_state = GameScreen.PAUSED
             elif screen_state == GameScreen.VICTORY:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and (session is not None):
@@ -310,6 +317,7 @@ def run() -> None:
                             if nxt:
                                 session = RoundSession.new(make_level_by_id(nxt))
                                 phys_accum = 0.0
+                                if settings.music_enabled: audio_stub.start_music()
                                 screen_state = GameScreen.PLAY
                         elif vic_r_menu3.collidepoint(ev_mx, ev_my):
                             audio_stub.play_ui_confirm()
@@ -319,6 +327,7 @@ def run() -> None:
                             audio_stub.play_ui_confirm()
                             session = RoundSession.new(make_level_by_id(lid))
                             phys_accum = 0.0
+                            if settings.music_enabled: audio_stub.start_music()
                             screen_state = GameScreen.PLAY
                     elif vic_r_menu2.collidepoint(ev_mx, ev_my):
                         audio_stub.play_ui_confirm()
@@ -328,6 +337,7 @@ def run() -> None:
                         audio_stub.play_ui_confirm()
                         session = RoundSession.new(make_level_by_id(lid))
                         phys_accum = 0.0
+                        audio_stub.start_music()
                         screen_state = GameScreen.PLAY
             elif screen_state == GameScreen.GAME_OVER:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and (session is not None):
@@ -339,16 +349,20 @@ def run() -> None:
                         audio_stub.play_ui_confirm()
                         session = RoundSession.new(make_level_by_id(session.level.id))
                         phys_accum = 0.0
+                        audio_stub.start_music()
                         screen_state = GameScreen.PLAY
             elif screen_state == GameScreen.PAUSED and session is not None:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    audio_stub.unpause_music()
                     screen_state = GameScreen.PLAY
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if pause_continuar_rect.collidepoint(ev_mx, ev_my):
                         audio_stub.play_ui_confirm()
+                        audio_stub.unpause_music()
                         screen_state = GameScreen.PLAY
                     elif pause_menu_rect.collidepoint(ev_mx, ev_my):
                         audio_stub.play_ui_confirm()
+                        audio_stub.stop_music()
                         session.cancel_aim()
                         menu_panel = MenuPanel.MAIN
                         screen_state = GameScreen.MENU
@@ -369,6 +383,8 @@ def run() -> None:
                 phys_accum -= FIXED_DT
                 out = session.physics_step(FIXED_DT)
                 if out == RoundOutcome.VICTORY:
+                    audio_stub.stop_music()
+                    audio_stub.play_victory()
                     strokes_used_victory = session.level.strokes - session.strokes_left
                     stars_victory = calc_stars(session.strokes_left, session.level.strokes)
                     update_best_score(save_data, session.level.id, stars_victory, strokes_used_victory)
@@ -377,12 +393,14 @@ def run() -> None:
                     screen_state = GameScreen.VICTORY
                     break
                 if out == RoundOutcome.GAME_OVER_WATER:
+                    audio_stub.stop_music()
                     game_over_reason = 'A bola caiu na água.'
                     screen_state = GameScreen.GAME_OVER
                     break
                 if out == RoundOutcome.WATER_RESPAWN:
                     break
                 if out == RoundOutcome.GAME_OVER_STROKES:
+                    audio_stub.stop_music()
                     game_over_reason = 'Acabaram as tacadas.'
                     screen_state = GameScreen.GAME_OVER
                     break
@@ -392,7 +410,7 @@ def run() -> None:
         elif screen_state == GameScreen.MENU:
             draw_menu_background(logical_screen, menu_bg)
             if menu_panel == MenuPanel.MAIN:
-                draw_main_menu_buttons(logical_screen, menu_font_btn, menu_btn_rects, menu_labels, menu_icons)
+                draw_main_menu_buttons(logical_screen, menu_font_title, menu_font_btn, menu_btn_rects, menu_labels, menu_icons)
                 draw_menu_credits_chip(logical_screen, menu_credits_chip_rect)
             elif menu_panel == MenuPanel.SETTINGS:
                 draw_settings_overlay(logical_screen, menu_font_btn, menu_font_hint, settings, settings_rects)
