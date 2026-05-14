@@ -82,4 +82,4 @@ A pasta **`build/`** (também na raiz) contém apenas ficheiros temporários do 
 - Gabriel Lages Oliveira de Azevedo — Programação e Física
 - Guilherme Ruben Pereira Matos — Assets e Level Design
 
-Turma Zeta, 7º Período — UESPI
+Turma Zeta, 7º Período — ICEV
