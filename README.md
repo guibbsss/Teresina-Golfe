@@ -56,7 +56,7 @@ A pasta **`build/`** (também na raiz) contém apenas ficheiros temporários do 
 
 ---
 
-## Controlos
+## Controles
 
 | Ação | Controle |
 |------|----------|
